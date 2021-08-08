@@ -1,0 +1,4 @@
+{:paths ["src"]
+ :deps  {org.clojure/clojure            {:mvn/version "1.10.0"}
+         medley/medley                  {:mvn/version "1.3.0"}
+         meta-merge/meta-merge          {:mvn/version "1.0.0"}}}
