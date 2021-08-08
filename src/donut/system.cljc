@@ -1,6 +1,7 @@
 (ns donut.system
-  (:require [loom.graph :as lg]
-            [medley.core :as medley]
+  (:refer-clojure :exclude [ref])
+  (:require [com.rpl.specter :as sp]
+            [loom.graph :as lg]
             [meta-merge.core :as mm]))
 
 (comment
@@ -22,6 +23,8 @@
                  [:init :before] {}}}}})
 
 (defrecord Ref [key])
+(defn ref? [x] (instance? Ref x))
+(defn ref [k] (->Ref k))
 
 ;; signal
 
@@ -30,43 +33,46 @@
 ;; 3. reverse topsort graph
 ;; 4. compute graph
 
+(def config-collect-group-path
+  [:configs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
+
 (defn- apply-base
-  [{:keys [base configs] :as system}]
-  (assoc system :configs
-         (reduce-kv (fn [configs group-name components]
-                      (assoc configs
-                             group-name
-                             (reduce-kv (fn [group-config component-name component-config]
-                                          (assoc group-config
-                                                 component-name
-                                                 (mm/meta-merge (group-name base) component-config)))
-                                        {}
-                                        components)))
-                    {}
-                    configs)))
+  [{:keys [base] :as system}]
+  (sp/transform
+   [config-collect-group-path sp/MAP-VALS]
+   (fn [group-name component-config]
+     (mm/meta-merge (group-name base) component-config))
+   system))
 
-(defn gen-graph-add-nodes
-  [{:keys [configs] :as system}]
-  (assoc system :graph (let [graph (lg/digraph)]
-                         (reduce-kv (fn [graph group-name components]
-                                      (reduce (fn [graph component-name]
-                                                (lg/add-nodes graph [group-name component-name]))
-                                              graph
-                                              (keys components)))
-                                    graph
-                                    configs))))
+(defn- gen-graph-add-nodes
+  [system]
+  (assoc system :graph
+         (->> system
+              (sp/select [config-collect-group-path sp/MAP-KEYS])
+              (reduce (fn [graph node]
+                        (lg/add-nodes graph node))
+                      (lg/digraph)))))
 
-(defn gen-graph-add-edges
-  [{:keys [configs] :as system}]
-  system
-  #_(update system :graph (fn [graph]
-                            (reduce-kv (fn [graph group-name components]
-                                         (reduce (fn [graph component]
-                                                   (lg/add-nodes graph [group-name component-name]))
-                                                 graph
-                                                 (vals components)))
-                                       graph
-                                       configs))))
+(defn- ref-edges
+  [system]
+  (->> system
+       (sp/select [config-collect-group-path
+                   sp/ALL (sp/collect-one sp/FIRST) sp/LAST
+                   (sp/walker ref?) :key])
+       (map (fn [[group-name component-name key]]
+              [[group-name component-name]
+               (if (keyword? key)
+                 [group-name key]
+                 key)]))))
+
+(defn- gen-graph-add-edges
+  [system]
+  (update system :graph (fn [graph]
+                          (->> system
+                               ref-edges
+                               (reduce (fn [graph edge]
+                                         (lg/add-edges graph edge))
+                                       graph)))))
 
 (defn gen-graph
   [system]

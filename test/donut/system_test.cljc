@@ -18,14 +18,30 @@
          (#'ds/apply-base {:base    {:app {:lifecycle {:init-before [:foo]}}}
                            :configs {:app {:http-server {:lifecycle {:init-after [:bar]}}}}}))))
 
+(deftest ref-edges-test
+  (is (= [[[:env :http-port] [:env :bar]]
+          [[:app :http-server] [:env :http-port]]]
+         (#'ds/ref-edges {:configs {:env {:http-port {:config {:x (ds/ref :bar)}}}
+                                    :app {:http-server {:config {:port (ds/ref [:env :http-port])}}}}}))))
+
 (deftest gen-graph-test
   (let [system {:configs {:env {:http-port nil}
                           :app {:http-server nil}}}]
     (is (= (assoc system :graph (-> (lg/digraph)
                                     (lg/add-nodes [:env :http-port]
                                                   [:app :http-server])))
-           (ds/gen-graph {:configs {:env {:http-port nil}
-                                    :app {:http-server nil}}})))))
+           (ds/gen-graph system))))
+
+  (let [system {:configs {:env {:port-source nil
+                                :http-port (ds/ref :port-source)}
+                          :app {:http-server {:port (ds/ref [:env :http-port])}}}}]
+    (is (= (assoc system :graph (-> (lg/digraph)
+                                    (lg/add-nodes [:env :http-port]
+                                                  [:env :port-source]
+                                                  [:app :http-server])
+                                    (lg/add-edges [[:env :http-port] [:env :port-source]]
+                                                  [[:app :http-server] [:env :http-port]])))
+           (ds/gen-graph system)))))
 
 (def test-component-config
   {:env {:http-port {:value 9090}}
