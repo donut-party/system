@@ -5,24 +5,6 @@
             [loom.graph :as lg]
             [meta-merge.core :as mm]))
 
-(comment
-  {:app
-   {:http-server
-    {:config    {}
-     :lifecycle {:init        {}
-                 :init-before []
-                 :init-after  []
-                 :halt        (fn [])
-                 :halt-before []
-                 :half-after  []
-                 :suspend     (fn [])
-                 :resume      (fn [])}}}}
-
-  {:app
-   {:http-server
-    {:lifecycle {:init           {}
-                 [:init :before] {}}}}})
-
 (defrecord DonutSystem [base configs instances graph signal component-order])
 (defn system? [x] (instance? System x))
 
@@ -30,10 +12,12 @@
 (defn ref? [x] (instance? Ref x))
 (defn ref [k] (->Ref k))
 
-#_(defn- resolve-refs
-    [system component-id]
-    (sp/transform [:configs component-id]
-                  system))
+(defn- resolve-refs
+  [system component-id]
+  (sp/transform [:configs component-id (sp/walker ref?)]
+                (fn [{:keys [key]}]
+                  (sp/select-one [:instances key] system))
+                system))
 
 (def config-collect-group-path
   [:configs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
@@ -141,10 +125,8 @@
     (fn [system]
       (if (continue-applying-signal? system)
         (let [stage-result (base-fn
-                            (get-in system (into [:instances] component-id))
-                            (get-in system (-> [:components]
-                                               (into component-id)
-                                               (conj :config)))
+                            (sp/select-one [:instances component-id] system)
+                            (sp/select-one [:configs component-id :config] system)
                             (merge system (channel-fns system component-id stage-name)))]
           ;; if before or after returns a non-system, disregard it
           ;; accommodating side-effecting fns we want to ignore
@@ -162,11 +144,10 @@
                             (constantly signal-apply-fn))]
       (around-f
        (if (continue-applying-signal? system)
-         (let [stage-result (signal-apply-fn
-                             (get-in system (into [:instances] component-id))
-                             (get-in system (-> [:components]
-                                                (into component-id)
-                                                (conj :config)))
+         (let [system       (resolve-refs system component-id)
+               stage-result (signal-apply-fn
+                             (sp/select-one [:instances component-id] system)
+                             (sp/select-one [:configs component-id :config] system)
                              (merge system (channel-fns system component-id stage-name)))]
            ;; by default the signal apply fn updates the component's instance
            (if (system? stage-result)
@@ -206,11 +187,11 @@
 
 (defn signal
   [{:keys [component-order] :as system} signal-name]
-  (let [system (-> system
-                   (initialize-system)
-                   (apply-base)
-                   (gen-graph))
-        order  (get component-order signal-name identity)]
+  (let [{:keys [component-order] :as system} (-> system
+                                                 (initialize-system)
+                                                 (apply-base)
+                                                 (gen-graph))
+        order (get component-order signal-name identity)]
     (loop [system               system
            [component-id & ids] (order (la/topsort (:graph system)))]
       (if component-id

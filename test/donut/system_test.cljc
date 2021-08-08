@@ -25,6 +25,13 @@
          (#'ds/expand-refs {:configs {:env {:http-port {:config {:x (ds/ref :bar)}}}
                                       :app {:http-server {:config {:port (ds/ref [:env :http-port])}}}}}))))
 
+(deftest resolve-refs-test
+  (is (= {:configs   {:app {:http-server {:config {:port 9090}}}},
+          :instances {:env {:http-port 9090}}}
+         (#'ds/resolve-refs {:configs   {:app {:http-server {:config {:port (ds/ref [:env :http-port])}}}}
+                             :instances {:env {:http-port 9090}}}
+                            [:app :http-server]))))
+
 (deftest ref-edges-test
   (is (= [[[:env :http-port] [:env :bar]]
           [[:app :http-server] [:env :http-port]]]
@@ -64,4 +71,12 @@
              (ds/signal :halt)
              (select-keys [:instances])))))
 
-(deftest ref-test)
+(deftest ref-test
+  (is (= {:instances {:env {:http-port 9090}
+                      :app {:http-server 9090}}}
+         (-> {:configs {:env {:http-port {:lifecycle {:init 9090}}}
+                        :app {:http-server {:config    {:port (ds/ref [:env :http-port])}
+                                            :lifecycle {:init (fn [_ {:keys [port]} _]
+                                                                port)}}}}}
+             (ds/signal :init)
+             (select-keys [:instances])))))
