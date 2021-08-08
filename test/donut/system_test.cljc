@@ -43,19 +43,8 @@
                                                   [[:app :http-server] [:env :http-port]])))
            (ds/gen-graph system)))))
 
-(def test-component-config
-  {:env {:http-port {:value 9090}}
-   :app {:server {:constructor identity
-                  :config      {:port [:env :http-port]}
-                  :before      [(fn [])]
-                  :after       [(fn [])]}}})
-
-#_(deftest transition-test
-    (is (= {:state :running
-            :env   {:http-port 9090}
-            :app   {:server nil}}
-           (ds/transition {}
-                          :running
-                          ds/transition-config
-                          ds/default-build-config
-                          test-component-config))))
+(deftest signal-test
+  (is (= {:instances {:app {:boop "boop"}}}
+         (-> {:configs {:app {:boop {:lifecycle {:init "boop"}}}}}
+             (ds/signal :init)
+             (select-keys [:instances])))))
