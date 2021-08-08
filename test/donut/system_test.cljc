@@ -18,6 +18,13 @@
          (#'ds/apply-base {:base    {:app {:lifecycle {:init-before [:foo]}}}
                            :configs {:app {:http-server {:lifecycle {:init-after [:bar]}}}}}))))
 
+
+(deftest expnd-refs-test
+  (is (= {:configs {:env {:http-port {:config {:x (ds/ref [:env :bar])}}}
+                    :app {:http-server {:config {:port (ds/ref [:env :http-port])}}}}}
+         (#'ds/expand-refs {:configs {:env {:http-port {:config {:x (ds/ref :bar)}}}
+                                      :app {:http-server {:config {:port (ds/ref [:env :http-port])}}}}}))))
+
 (deftest ref-edges-test
   (is (= [[[:env :http-port] [:env :bar]]
           [[:app :http-server] [:env :http-port]]]
@@ -43,7 +50,7 @@
                                                   [[:app :http-server] [:env :http-port]])))
            (ds/gen-graph system)))))
 
-(deftest signal-test
+(deftest simple-signal-test
   (is (= {:instances {:app {:boop "boop"}}}
          (-> {:configs {:app {:boop {:lifecycle {:init "boop"}}}}}
              (ds/signal :init)
@@ -56,3 +63,5 @@
              (ds/signal :init)
              (ds/signal :halt)
              (select-keys [:instances])))))
+
+(deftest ref-test)

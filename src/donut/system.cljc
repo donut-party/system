@@ -1,7 +1,6 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
-  (:require [clojure.set :as set]
-            [com.rpl.specter :as sp]
+  (:require [com.rpl.specter :as sp]
             [loom.alg :as la]
             [loom.graph :as lg]
             [meta-merge.core :as mm]))
@@ -31,10 +30,23 @@
 (defn ref? [x] (instance? Ref x))
 (defn ref [k] (->Ref k))
 
-;; signal
+#_(defn- resolve-refs
+    [system component-id]
+    (sp/transform [:configs component-id]
+                  system))
 
 (def config-collect-group-path
   [:configs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
+
+(defn- expand-refs
+  "Transforms all refs of a local component name to a full component id"
+  [system]
+  (->> system
+       (sp/transform [config-collect-group-path (sp/walker ref?)]
+                     (fn [group-name r]
+                       (if (keyword? (:key r))
+                         (->Ref [group-name (:key r)])
+                         r)))))
 
 (defn- apply-base
   [{:keys [base] :as system}]
@@ -56,14 +68,13 @@
 (defn- ref-edges
   [system]
   (->> system
+       expand-refs
        (sp/select [config-collect-group-path
                    sp/ALL (sp/collect-one sp/FIRST) sp/LAST
                    (sp/walker ref?) :key])
        (map (fn [[group-name component-name key]]
               [[group-name component-name]
-               (if (keyword? key)
-                 [group-name key]
-                 key)]))))
+               key]))))
 
 (defn- gen-graph-add-edges
   [system]
