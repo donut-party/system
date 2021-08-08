@@ -47,4 +47,12 @@
   (is (= {:instances {:app {:boop "boop"}}}
          (-> {:configs {:app {:boop {:lifecycle {:init "boop"}}}}}
              (ds/signal :init)
+             (select-keys [:instances]))))
+
+  (is (= {:instances {:app {:boop "boop and boop again"}}}
+         (-> {:configs {:app {:boop {:lifecycle {:init "boop"
+                                                 :halt (fn [c _ _]
+                                                         (str c " and boop again"))}}}}}
+             (ds/signal :init)
+             (ds/signal :halt)
              (select-keys [:instances])))))
