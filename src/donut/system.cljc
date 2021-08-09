@@ -128,8 +128,9 @@
                             (sp/select-one [:instances component-id] system)
                             (sp/select-one [:configs component-id :config] system)
                             (merge system (channel-fns system component-id stage-name)))]
-          ;; if before or after returns a non-system, disregard it
-          ;; accommodating side-effecting fns we want to ignore
+          ;; if before or after returns a non-system, disregard it. this
+          ;; accommodates side-effecting fns where we almost always want to ignore
+          ;; the return value
           (if (system? stage-result)
             stage-result
             system))
@@ -186,7 +187,7 @@
                              {:component-order default-component-order}))))
 
 (defn signal
-  [{:keys [component-order] :as system} signal-name]
+  [system signal-name]
   (let [{:keys [component-order] :as system} (-> system
                                                  (initialize-system)
                                                  (apply-base)

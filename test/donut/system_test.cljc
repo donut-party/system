@@ -1,8 +1,8 @@
 (ns donut.system-test
   (:require [donut.system :as ds]
             [loom.graph :as lg]
-            #?(:clj [clojure.test :refer [deftest is]]
-               :cljs [cljs.test :refer [deftest is] :include-macros true])))
+            #?(:clj [clojure.test :refer [deftest is testing]]
+               :cljs [cljs.test :refer [deftest is testing] :include-macros true])))
 
 {:base      {:boot {}
              :app  {:lifecycle {:init-before []}}
@@ -72,11 +72,12 @@
              (select-keys [:instances])))))
 
 (deftest ref-test
-  (is (= {:instances {:env {:http-port 9090}
-                      :app {:http-server 9090}}}
-         (-> {:configs {:env {:http-port {:lifecycle {:init 9090}}}
-                        :app {:http-server {:config    {:port (ds/ref [:env :http-port])}
-                                            :lifecycle {:init (fn [_ {:keys [port]} _]
-                                                                port)}}}}}
-             (ds/signal :init)
-             (select-keys [:instances])))))
+  (testing "referred port number is passed to referrer"
+    (is (= {:instances {:env {:http-port 9090}
+                        :app {:http-server 9090}}}
+           (-> {:configs {:env {:http-port {:lifecycle {:init 9090}}}
+                          :app {:http-server {:config    {:port (ds/ref [:env :http-port])}
+                                              :lifecycle {:init (fn [_ {:keys [port]} _]
+                                                                  port)}}}}}
+               (ds/signal :init)
+               (select-keys [:instances]))))))
