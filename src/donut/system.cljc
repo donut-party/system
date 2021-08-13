@@ -1,9 +1,10 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
-  (:require [com.rpl.specter :as sp]
-            [loom.alg :as la]
-            [loom.graph :as lg]
-            [meta-merge.core :as mm]))
+  (:require
+   [com.rpl.specter :as sp]
+   [loom.alg :as la]
+   [loom.graph :as lg]
+   [meta-merge.core :as mm]))
 
 (defrecord DonutSystem [base defs instances graph signal component-order])
 (defn system? [x] (instance? System x))
@@ -42,12 +43,13 @@
 
 (defn- gen-graph-add-nodes
   [system]
-  (assoc system :graph
-         (->> system
-              (sp/select [config-collect-group-path sp/MAP-KEYS])
-              (reduce (fn [graph node]
-                        (lg/add-nodes graph node))
-                      (lg/digraph)))))
+  (assoc system
+   :graph
+   (->> system
+        (sp/select [config-collect-group-path sp/MAP-KEYS])
+        (reduce (fn [graph node]
+                  (lg/add-nodes graph node))
+         (lg/digraph)))))
 
 (defn- ref-edges
   [system]
@@ -62,12 +64,14 @@
 
 (defn- gen-graph-add-edges
   [system]
-  (update system :graph (fn [graph]
-                          (->> system
-                               ref-edges
-                               (reduce (fn [graph edge]
-                                         (lg/add-edges graph edge))
-                                       graph)))))
+  (update system
+          :graph
+          (fn [graph]
+            (->> system
+                 ref-edges
+                 (reduce (fn [graph edge]
+                           (lg/add-edges graph edge))
+                  graph)))))
 
 (defn gen-graph
   [system]
@@ -84,15 +88,19 @@
   [& xs]
   (->> xs
        (reduce (fn [s x]
-                 (str s (if (keyword? x)
-                          (subs (str x) 1)
-                          x)))
-               "")
+                 (str s
+                      (if (keyword? x)
+                        (subs (str x) 1)
+                        x)))
+        "")
        keyword))
 
 (defn- continue-applying-signal?
   [system]
-  (-> system :out :errors empty?))
+  (-> system
+      :out
+      :errors
+      empty?))
 
 (defn- handler-lifecycle-names
   [signal-name]
@@ -104,10 +112,10 @@
 (defn channel-fn
   [system channel component-id stage-name]
   #(assoc-in system
-             (-> channel
-                 (into component-id)
-                 (conj stage-name))
-             %1))
+    (-> channel
+        (into component-id)
+        (conj stage-name))
+    %1))
 
 (defn- channel-fns
   [system component-id stage-name]
@@ -120,7 +128,7 @@
   [_ _ system]
   system)
 
-(defn- handlers-stage-fn
+(defn- handler-stage-fn
   [base-fn component-id stage-name]
   (let [base-fn (or base-fn system-identity)]
     (fn [system]
@@ -128,7 +136,10 @@
         (let [stage-result (base-fn
                             (sp/select-one [:instances component-id] system)
                             (sp/select-one [:defs component-id :deps] system)
-                            (merge system (channel-fns system component-id stage-name)))]
+                            (merge system
+                                   (channel-fns system
+                                                component-id
+                                                stage-name)))]
           ;; if before or after returns a non-system, disregard it. this
           ;; accommodates side-effecting fns where we almost always want to ignore
           ;; the return value
@@ -140,7 +151,7 @@
 (defn- around-fn
   [around-f signal-apply-fn component-id stage-name]
   (fn [system]
-    (let [around-f        (handlers-stage-fn around-f component-id stage-name)
+    (let [around-f        (handler-stage-fn around-f component-id stage-name)
           signal-apply-fn (if (fn? signal-apply-fn)
                             signal-apply-fn
                             (constantly signal-apply-fn))]
@@ -150,7 +161,10 @@
                stage-result (signal-apply-fn
                              (sp/select-one [:instances component-id] system)
                              (sp/select-one [:defs component-id :deps] system)
-                             (merge system (channel-fns system component-id stage-name)))]
+                             (merge system
+                                    (channel-fns system
+                                                 component-id
+                                                 stage-name)))]
            ;; by default the signal apply fn updates the component's instance
            (if (system? stage-result)
              stage-result
@@ -163,17 +177,20 @@
         {:keys [apply-signal
                 before
                 around
-                after]}     (handler-lifecycle-names signal-name)]
+                after]}
+        (handler-lifecycle-names signal-name)]
     {:around (around-fn (around component-handlers)
                         (apply-signal component-handlers)
                         component-id
                         apply-signal)
-     :before (handlers-stage-fn (before component-handlers) component-id before)
-     :after  (handlers-stage-fn (after component-handlers) component-id after)}))
+     :before (handler-stage-fn (before component-handlers) component-id before)
+     :after  (handler-stage-fn (after component-handlers) component-id after)}))
 
 (defn apply-signal-to-component
   [system component-id signal-name]
-  (let [{:keys [before around after]} (handler-lifecycle system component-id signal-name)]
+  (let [{:keys [before around after]} (handler-lifecycle system
+                                                         component-id
+                                                         signal-name)]
     (-> system
         before
         around
@@ -193,7 +210,9 @@
                                                  (initialize-system)
                                                  (apply-base)
                                                  (gen-graph))
-        order (get component-order signal-name identity)]
+        order                                (get component-order
+                                                  signal-name
+                                                  identity)]
     (loop [system               system
            [component-id & ids] (order (la/topsort (:graph system)))]
       (if component-id
