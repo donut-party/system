@@ -157,8 +157,7 @@
                             (constantly signal-apply-fn))]
       (around-f
        (if (continue-applying-signal? system)
-         (let [system       (resolve-refs system component-id)
-               stage-result (signal-apply-fn
+         (let [stage-result (signal-apply-fn
                              (sp/select-one [:instances component-id] system)
                              (sp/select-one [:defs component-id :deps] system)
                              (merge system
@@ -190,7 +189,8 @@
   [system component-id signal-name]
   (let [{:keys [before around after]} (handler-lifecycle system
                                                          component-id
-                                                         signal-name)]
+                                                         signal-name)
+        system                        (resolve-refs system component-id)]
     (-> system
         before
         around
