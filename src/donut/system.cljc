@@ -86,14 +86,15 @@
        (reduce (fn [s x]
                  (str s (if (keyword? x)
                           (subs (str x) 1)
-                          x))))
+                          x)))
+               "")
        keyword))
 
 (defn- continue-applying-signal?
   [system]
   (-> system :out :errors empty?))
 
-(defn- handlers-names
+(defn- handler-lifecycle-names
   [signal-name]
   {:apply-signal signal-name
    :before       (strk signal-name :-before)
@@ -162,7 +163,7 @@
         {:keys [apply-signal
                 before
                 around
-                after]}     (handlers-names signal-name)]
+                after]}     (handler-lifecycle-names signal-name)]
     {:around (around-fn (around component-handlers)
                         (apply-signal component-handlers)
                         component-id

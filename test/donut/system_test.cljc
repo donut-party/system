@@ -81,3 +81,9 @@
                                                               port)}}}}}
                (ds/signal :init)
                (select-keys [:instances]))))))
+
+
+{:defs {:env {:http-port {:handlers {:init 9090}}}
+        :app {:http-server {:deps     {:port (ds/ref [:env :http-port])}
+                            :handlers {:init (fn [_ {:keys [port]} _]
+                                               port)}}}}}
