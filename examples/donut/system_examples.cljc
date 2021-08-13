@@ -17,8 +17,33 @@
                                             :port  port})
 
                                          :halt
-                                         (fn [_ _ _]
-                                           {})}}}}})
+                                         (fn [_ _ _] {})}}}}})
 
 ;; starting a server
 (ds/signal system :init)
+
+;; multiple server system
+(def http-server-component
+  {:deps     {:port (ds/ref [:env :http-port])}
+   :handlers {:init
+              (fn [_ {:keys [port]} _]
+                {:state :running
+                 :port  (port)})
+
+              :init-after
+              (fn [{:keys [port]} _ _]
+                (prn "started http server on port "
+                     port))
+
+              :halt
+              (fn [_ _ _]
+                {})}})
+
+
+(def multiple-server-system
+  {:defs {:env {:http-port {:handlers {:init (fn [& _]
+                                               (let [port-num (atom 9090)]
+                                                 #(swap! port-num inc)))}}}
+          :app {:http-server-1 http-server-component
+
+                :http-server-2 http-server-component}}})

@@ -20,6 +20,14 @@
                   (sp/select-one [:instances key] system))
                 system))
 
+(defn- component-deps
+  [system component-id]
+  (sp/select-one [:defs component-id :deps] system))
+
+(defn- assoc-component-deps
+  [system component-id deps]
+  (sp/setval [:defs component-id :deps] deps system))
+
 (def config-collect-group-path
   [:defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
@@ -187,15 +195,18 @@
 
 (defn apply-signal-to-component
   [system component-id signal-name]
-  (let [{:keys [before around after]} (handler-lifecycle system
+  (let [orig-deps                     (component-deps system component-id)
+        system                        (resolve-refs system component-id)
+        {:keys [before around after]} (handler-lifecycle system
                                                          component-id
-                                                         signal-name)
-        system                        (resolve-refs system component-id)]
+                                                         signal-name)]
     (-> system
         before
         around
         after
-        (assoc :signal signal-name))))
+        (assoc :signal signal-name)
+        ;; restore deps; we don't want them to remain resolved
+        (assoc-component-deps component-id orig-deps))))
 
 (defn initialize-system
   [maybe-system]
