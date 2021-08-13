@@ -7,7 +7,7 @@
    [meta-merge.core :as mm]))
 
 (defrecord DonutSystem [base defs instances graph signal component-order])
-(defn system? [x] (instance? System x))
+(defn system? [x] (instance? DonutSystem x))
 
 (defrecord Ref [key])
 (defn ref? [x] (instance? Ref x))
@@ -215,6 +215,10 @@
     (map->DonutSystem (merge maybe-system
                              {:component-order default-component-order}))))
 
+(defn- clean-after-signal-apply
+  [system]
+  (dissoc system :->error :->info :->instance :->warn))
+
 (defn signal
   [system signal-name]
   (let [{:keys [component-order] :as system} (-> system
@@ -224,9 +228,10 @@
         order                                (get component-order
                                                   signal-name
                                                   identity)]
-    (loop [system               system
-           [component-id & ids] (order (la/topsort (:graph system)))]
-      (if component-id
-        (recur (apply-signal-to-component system component-id signal-name)
-               ids)
-        system))))
+    (clean-after-signal-apply
+     (loop [system               system
+            [component-id & ids] (order (la/topsort (:graph system)))]
+       (if component-id
+         (recur (apply-signal-to-component system component-id signal-name)
+                ids)
+         system)))))

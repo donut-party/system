@@ -22,7 +22,9 @@
 ;; starting a server
 (ds/signal system :init)
 
-;; multiple server system
+;;---
+;;; multiple server system
+;;---
 (def http-server-component
   {:deps     {:port (ds/ref [:env :http-port])}
    :handlers {:init
@@ -35,15 +37,17 @@
                 (prn "started http server on port "
                      port))
 
+              :init-around
+              (fn [_ _ {:keys [->info]}]
+                (->info {:time 1}))
+
               :halt
               (fn [_ _ _]
                 {})}})
-
 
 (def multiple-server-system
   {:defs {:env {:http-port {:handlers {:init (fn [& _]
                                                (let [port-num (atom 9090)]
                                                  #(swap! port-num inc)))}}}
           :app {:http-server-1 http-server-component
-
                 :http-server-2 http-server-component}}})
