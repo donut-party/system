@@ -5,7 +5,7 @@
             [loom.graph :as lg]
             [meta-merge.core :as mm]))
 
-(defrecord DonutSystem [base configs instances graph signal component-order])
+(defrecord DonutSystem [base defs instances graph signal component-order])
 (defn system? [x] (instance? System x))
 
 (defrecord Ref [key])
@@ -14,13 +14,13 @@
 
 (defn- resolve-refs
   [system component-id]
-  (sp/transform [:configs component-id (sp/walker ref?)]
+  (sp/transform [:defs component-id (sp/walker ref?)]
                 (fn [{:keys [key]}]
                   (sp/select-one [:instances key] system))
                 system))
 
 (def config-collect-group-path
-  [:configs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
+  [:defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
 (defn- expand-refs
   "Transforms all refs of a local component name to a full component id"
@@ -93,7 +93,7 @@
   [system]
   (-> system :out :errors empty?))
 
-(defn- lifecycle-names
+(defn- handlers-names
   [signal-name]
   {:apply-signal signal-name
    :before       (strk signal-name :-before)
@@ -119,14 +119,14 @@
   [_ _ system]
   system)
 
-(defn- lifecycle-stage-fn
+(defn- handlers-stage-fn
   [base-fn component-id stage-name]
   (let [base-fn (or base-fn system-identity)]
     (fn [system]
       (if (continue-applying-signal? system)
         (let [stage-result (base-fn
                             (sp/select-one [:instances component-id] system)
-                            (sp/select-one [:configs component-id :config] system)
+                            (sp/select-one [:defs component-id :deps] system)
                             (merge system (channel-fns system component-id stage-name)))]
           ;; if before or after returns a non-system, disregard it. this
           ;; accommodates side-effecting fns where we almost always want to ignore
@@ -139,7 +139,7 @@
 (defn- around-fn
   [around-f signal-apply-fn component-id stage-name]
   (fn [system]
-    (let [around-f        (lifecycle-stage-fn around-f component-id stage-name)
+    (let [around-f        (handlers-stage-fn around-f component-id stage-name)
           signal-apply-fn (if (fn? signal-apply-fn)
                             signal-apply-fn
                             (constantly signal-apply-fn))]
@@ -148,7 +148,7 @@
          (let [system       (resolve-refs system component-id)
                stage-result (signal-apply-fn
                              (sp/select-one [:instances component-id] system)
-                             (sp/select-one [:configs component-id :config] system)
+                             (sp/select-one [:defs component-id :deps] system)
                              (merge system (channel-fns system component-id stage-name)))]
            ;; by default the signal apply fn updates the component's instance
            (if (system? stage-result)
@@ -156,23 +156,23 @@
              (assoc-in system (into [:instances] component-id) stage-result)))
          system)))))
 
-(defn- lifecycle-fns
-  [{:keys [configs]} component-id signal-name]
-  (let [component-lifecycle (get-in configs (conj component-id :lifecycle))
+(defn- handler-lifecycle
+  [{:keys [defs]} component-id signal-name]
+  (let [component-handlers (get-in defs (conj component-id :handlers))
         {:keys [apply-signal
                 before
                 around
-                after]}     (lifecycle-names signal-name)]
-    {:around (around-fn (around component-lifecycle)
-                        (apply-signal component-lifecycle)
+                after]}     (handlers-names signal-name)]
+    {:around (around-fn (around component-handlers)
+                        (apply-signal component-handlers)
                         component-id
                         apply-signal)
-     :before (lifecycle-stage-fn (before component-lifecycle) component-id before)
-     :after  (lifecycle-stage-fn (after component-lifecycle) component-id after)}))
+     :before (handlers-stage-fn (before component-handlers) component-id before)
+     :after  (handlers-stage-fn (after component-handlers) component-id after)}))
 
 (defn apply-signal-to-component
   [system component-id signal-name]
-  (let [{:keys [before around after]} (lifecycle-fns system component-id signal-name)]
+  (let [{:keys [before around after]} (handler-lifecycle system component-id signal-name)]
     (-> system
         before
         around
