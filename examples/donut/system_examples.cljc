@@ -89,3 +89,13 @@
           :server-2 (assoc-in server-component-group
                      [:req-handler :handlers :init]
                      (constantly (fn req-handler-2 [req] req)))}})
+
+(def relative-ref-system
+  {:defs {:env      {:http-port {:handlers {:init (fn [& _]
+                                                    (let [port-num (atom 9090)]
+                                                      #(swap! port-num inc)))}}}
+          :server-1 [server-component-group
+                     {:req-handler {:handlers {:init (constantly (fn req-handler-1 [req] req))}}}]
+
+          :server-2 [server-component-group
+                     {:req-handler {:handlers {:init (constantly (fn req-handler-2 [req] req))}}}]}})
