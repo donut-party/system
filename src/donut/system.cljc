@@ -8,7 +8,7 @@
    [meta-merge.core :as mm]))
 
 (def ComponentDefinition
-  [:map [::deps any?]])
+  [:map])
 
 (def ComponentName any?)
 
@@ -34,19 +34,14 @@
 (defn ref [k] (->Ref k))
 
 (defn- resolve-refs
+  "resolve component def to ::resolved path"
   [system component-id]
-  (sp/transform [::defs component-id (sp/walker ref?)]
-                (fn [{:keys [key]}]
-                  (sp/select-one [::instances key] system))
-                system))
-
-(defn- component-deps
-  [system component-id]
-  (sp/select-one [::defs component-id ::deps] system))
-
-(defn- assoc-component-deps
-  [system component-id deps]
-  (sp/setval [::defs component-id ::deps] deps system))
+  (->> system
+       (sp/setval [::resolved component-id]
+                  (sp/select-one [::defs component-id] system))
+       (sp/transform [::resolved component-id (sp/walker ref?)]
+                     (fn [{:keys [key]}]
+                       (sp/select-one [::instances key] system)))))
 
 (def config-collect-group-path
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
@@ -163,7 +158,7 @@
       (if (continue-applying-signal? system)
         (let [stage-result (base-fn
                             (sp/select-one [::instances component-id] system)
-                            (sp/select-one [::defs component-id ::deps] system)
+                            (sp/select-one [::resolved component-id] system)
                             (merge system
                                    (channel-fns system
                                                 component-id
@@ -187,7 +182,7 @@
        (if (continue-applying-signal? system)
          (let [stage-result (signal-apply-fn
                              (sp/select-one [::instances component-id] system)
-                             (sp/select-one [::defs component-id ::deps] system)
+                             (sp/select-one [::resolved component-id] system)
                              (merge system
                                     (channel-fns system
                                                  component-id
@@ -199,8 +194,8 @@
          system)))))
 
 (defn- handler-lifecycle
-  [{:keys [::defs]} component-id signal-name]
-  (let [component-handlers (get-in defs component-id)
+  [system component-id signal-name]
+  (let [component-handlers (sp/select-one [::resolved component-id] system)
         {:keys [apply-signal
                 before
                 around
@@ -215,8 +210,7 @@
 
 (defn apply-signal-to-component
   [system component-id signal-name]
-  (let [orig-deps                     (component-deps system component-id)
-        system                        (resolve-refs system component-id)
+  (let [system                        (resolve-refs system component-id)
         {:keys [before around after]} (handler-lifecycle system
                                                          component-id
                                                          signal-name)]
@@ -224,9 +218,7 @@
         before
         around
         after
-        (assoc :signal signal-name)
-        ;; restore deps; we don't want them to remain resolved
-        (assoc-component-deps component-id orig-deps))))
+        (assoc :signal signal-name))))
 
 (defn initialize-system
   [maybe-system]

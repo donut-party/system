@@ -12,17 +12,18 @@
                                 :defs {:app {:http-server #::ds{:init-after [:bar]}}}}))))
 
 
-(deftest expnd-refs-test
+(deftest expand-refs-test
   (is (= #::ds{:defs {:env {:http-port #::ds{:deps {:x (ds/ref [:env :bar])}}}
                       :app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}}}}}
          (#'ds/expand-refs #::ds{:defs {:env {:http-port #::ds{:deps {:x (ds/ref :bar)}}}
                                         :app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}}}}}))))
 
 (deftest resolve-refs-test
-  (is (= #::ds{:defs {:app {:http-server #::ds{:deps {:port 9090}}}},
-               :instances  {:env {:http-port 9090}}}
-         (#'ds/resolve-refs #::ds{:defs {:app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}}}}
-                                  :instances  {:env {:http-port 9090}}}
+  (is (= #::ds{:defs      {:app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}}}}
+               :resolved  {:app {:http-server #::ds{:deps {:port 9090}}}},
+               :instances {:env {:http-port 9090}}}
+         (#'ds/resolve-refs #::ds{:defs      {:app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}}}}
+                                  :instances {:env {:http-port 9090}}}
                             [:app :http-server]))))
 
 (deftest ref-edges-test
@@ -69,8 +70,8 @@
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port #::ds{:init 9090}}
-                            :app {:http-server #::ds{:deps {:port (ds/ref [:env :http-port])}
-                                                     :init (fn [_ {:keys [port] :as deps} _]
+                            :app {:http-server #::ds{:port (ds/ref [:env :http-port])
+                                                     :init (fn [_ {:keys [::ds/port] :as res} _]
                                                              port)}}}}
                (ds/signal ::ds/init)
                (select-keys [::ds/instances]))))))
