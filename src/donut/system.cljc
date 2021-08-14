@@ -250,10 +250,14 @@
                 ids)
          system)))))
 
-
 (defn system-merge
   [& systems]
   (reduce (fn [system system-def]
             (mm/meta-merge system (initialize-system system-def)))
           {}
           systems))
+
+(defn validate-with-malli
+  [{:keys [schema]} instance-val {:keys [->validation]}]
+  (some-> (and schema (m/explain schema instance-val))
+          ->validation))

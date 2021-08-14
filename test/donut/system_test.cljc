@@ -120,9 +120,7 @@
                                                                                       :type    nil
                                                                                       :message nil})]}}}}}
            (-> #::ds{:base
-                     {:env {:init-after (fn [{:keys [schema]} instance-val {:keys [->validation]}]
-                                          (some-> (and schema (m/explain schema instance-val))
-                                                  ->validation))}}
+                     {:env {:init-after ds/validate-with-malli}}
 
                      :defs
                      {:env
