@@ -39,3 +39,7 @@
                   {:state :running
                    :port  port})
    :halt        (fn [_ _ _] {})})
+
+(def HttpComponent2
+  [{:port (ds/ref [:env :http-port])}
+   HttpComponent])

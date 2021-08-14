@@ -220,10 +220,22 @@
         after
         (assoc :signal signal-name))))
 
+(defn- merge-component-defs
+  "Components defined as vectors of maps get merged into a single map"
+  [system]
+  (sp/transform [::defs sp/MAP-VALS sp/MAP-VALS]
+                (fn [component-def]
+                  (if (sequential? component-def)
+                    (apply merge component-def)
+                    component-def))
+                system))
+
 (defn initialize-system
   [maybe-system]
-  (merge maybe-system
-         {::component-order default-component-order}))
+  (->> (mm/meta-merge
+        maybe-system
+        ^:displace {::component-order default-component-order})
+       merge-component-defs))
 
 (defn- clean-after-signal-apply
   [system]
@@ -245,3 +257,11 @@
          (recur (apply-signal-to-component system component-id signal-name)
                 ids)
          system)))))
+
+
+(defn system-merge
+  [& systems]
+  (reduce (fn [system system-def]
+            (mm/meta-merge system (initialize-system system-def)))
+          {}
+          systems))

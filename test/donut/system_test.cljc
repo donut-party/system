@@ -11,6 +11,12 @@
          (#'ds/apply-base #::ds{:base {:app {:init-before [:foo]}}
                                 :defs {:app {:http-server {:init-after [:bar]}}}}))))
 
+(deftest merge-component-defs-test
+  (is (= #::ds{:defs {:app {:http-server {:foo :bar
+                                          :baz :bux}}}}
+         (#'ds/merge-component-defs
+          #::ds{:defs {:app {:http-server [{:foo :bar}
+                                           {:baz :bux}]}}}))))
 
 (deftest expand-refs-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
@@ -77,7 +83,27 @@
                (select-keys [::ds/instances]))))))
 
 
-{:defs {:env {:http-port {:handlers {:init 9090}}}
-        :app {:http-server {:deps     {:port (ds/ref [:env :http-port])}
-                            :handlers {:init (fn [{:keys [port]} _ _]
-                                               port)}}}}}
+(deftest component-merge-test
+  (testing "components can be defined as a vector of maps, in which case they're all merged"
+    (let [handlers {:init (fn [{:keys [port] :as res} _ _]
+                            port)}]
+      (is (= #::ds{:instances {:env {:http-port 9090}
+                               :app {:http-server 9090}}}
+             (-> #::ds{:defs {:env {:http-port {:init 9090}}
+                              :app {:http-server [{:port (ds/ref [:env :http-port])}
+                                                  handlers]}}}
+                 (ds/signal :init)
+                 (select-keys [::ds/instances])))))))
+
+(deftest system-merge
+  (let [handlers {:init (fn [{:keys [port] :as res} _ _]
+                          port)}]
+    (is (= #::ds{:defs {:env {:http-port {:init 9090}}
+                        :app {:http-server (merge {:port (ds/ref [:env :http-port])}
+                                                  handlers)}}}
+           (ds/system-merge
+            #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
+                                             handlers]}}}
+            #::ds{:defs {:env {:http-port {:init 9090}}}})))))
+
+(deftest validate-component)
