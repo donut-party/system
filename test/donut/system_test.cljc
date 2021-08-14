@@ -3,7 +3,8 @@
             [loom.graph :as lg]
             #?(:clj [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
-            [malli.core :as m]))
+            [malli.core :as m]
+            [malli.impl.util :as miu]))
 
 (deftest apply-base-test
   (is (= #::ds{:base {:app {:init-before [:foo]}}
@@ -110,19 +111,18 @@
 
 (deftest validate-component
   (let [schema (m/schema int?)]
-    (is (= #::ds{:out {:info {:env {:http-port {:init-after
-                                                {:schema schema
-                                                 :value  "9090"
-                                                 :errors [{:path    []
-                                                           :in      []
-                                                           :schema  schema
-                                                           :value   "9090"
-                                                           :type    nil
-                                                           :message nil}]}}}}}}
+    (is (= #::ds{:out {:validation {:env {:http-port {:schema schema
+                                                      :value  "9090"
+                                                      :errors [(miu/map->SchemaError {:path    []
+                                                                                      :in      []
+                                                                                      :schema  schema
+                                                                                      :value   "9090"
+                                                                                      :type    nil
+                                                                                      :message nil})]}}}}}
            (-> #::ds{:base
-                     {:env {:init-after (fn [{:keys [schema]} instance-val {:keys [->info]}]
+                     {:env {:init-after (fn [{:keys [schema]} instance-val {:keys [->validation]}]
                                           (some-> (and schema (m/explain schema instance-val))
-                                                  ->info))}}
+                                                  ->validation))}}
 
                      :defs
                      {:env

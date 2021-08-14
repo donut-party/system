@@ -135,23 +135,23 @@
    :around       (strk signal-name :-around)})
 
 (defn channel-fn
-  [system channel component-id stage-name]
-  #(sp/setval [channel component-id stage-name] % system))
+  [system channel component-id]
+  #(sp/setval [channel component-id] % system))
 
 (defn- channel-fns
-  [system component-id stage-name]
-  {:->info       (channel-fn system [::out :info] component-id stage-name)
-   :->error      (channel-fn system [::out :error] component-id stage-name)
-   :->warn       (channel-fn system [::out :warn] component-id stage-name)
-   :->validation (channel-fn system [::out :validation] component-id stage-name)
-   :->instance   (channel-fn system [::instances] component-id stage-name)})
+  [system component-id]
+  {:->info       (channel-fn system [::out :info] component-id)
+   :->error      (channel-fn system [::out :error] component-id)
+   :->warn       (channel-fn system [::out :warn] component-id)
+   :->validation (channel-fn system [::out :validation] component-id)
+   :->instance   (channel-fn system [::instances] component-id)})
 
 (defn- system-identity
   [_ _ system]
   system)
 
 (defn- handler-stage-fn
-  [base-fn component-id stage-name]
+  [base-fn component-id]
   (let [base-fn (or base-fn system-identity)]
     (fn [system]
       (if (continue-applying-signal? system)
@@ -159,9 +159,7 @@
                             (sp/select-one [::resolved component-id] system)
                             (sp/select-one [::instances component-id] system)
                             (merge system
-                                   (channel-fns system
-                                                component-id
-                                                stage-name)))]
+                                   (channel-fns system component-id)))]
           ;; if before or after returns a non-system, disregard it. this
           ;; accommodates side-effecting fns where we almost always want to ignore
           ;; the return value
@@ -171,9 +169,9 @@
         system))))
 
 (defn- around-fn
-  [around-f signal-apply-fn component-id stage-name]
+  [around-f signal-apply-fn component-id]
   (fn [system]
-    (let [around-f        (handler-stage-fn around-f component-id stage-name)
+    (let [around-f        (handler-stage-fn around-f component-id)
           signal-apply-fn (if (fn? signal-apply-fn)
                             signal-apply-fn
                             (constantly signal-apply-fn))]
@@ -183,9 +181,7 @@
                              (sp/select-one [::resolved component-id] system)
                              (sp/select-one [::instances component-id] system)
                              (merge system
-                                    (channel-fns system
-                                                 component-id
-                                                 stage-name)))]
+                                    (channel-fns system component-id)))]
            ;; by default the signal apply fn updates the component's instance
            (if (system? stage-result)
              stage-result
@@ -202,10 +198,9 @@
         (handler-lifecycle-names signal-name)]
     {:around (around-fn (around component-handlers)
                         (apply-signal component-handlers)
-                        component-id
-                        apply-signal)
-     :before (handler-stage-fn (before component-handlers) component-id before)
-     :after  (handler-stage-fn (after component-handlers) component-id after)}))
+                        component-id)
+     :before (handler-stage-fn (before component-handlers) component-id)
+     :after  (handler-stage-fn (after component-handlers) component-id)}))
 
 (defn apply-signal-to-component
   [system component-id signal-name]
