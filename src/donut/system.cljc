@@ -103,8 +103,8 @@
 
 (def default-component-order
   "Function to be applied on the topsorted graph of components"
-  {::init   reverse
-   ::resume reverse})
+  {:init   reverse
+   :resume reverse})
 
 (defn strk
   "Like `str` but with keywords"
