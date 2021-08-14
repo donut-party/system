@@ -77,7 +77,7 @@
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port {:init 9090}}
                             :app {:http-server {:port (ds/ref [:env :http-port])
-                                                :init (fn [{:keys [port] :as res} _ _]
+                                                :init (fn [{:keys [port]} _ _]
                                                         port)}}}}
                (ds/signal :init)
                (select-keys [::ds/instances]))))))
@@ -85,7 +85,7 @@
 
 (deftest component-merge-test
   (testing "components can be defined as a vector of maps, in which case they're all merged"
-    (let [handlers {:init (fn [{:keys [port] :as res} _ _]
+    (let [handlers {:init (fn [{:keys [port]} _ _]
                             port)}]
       (is (= #::ds{:instances {:env {:http-port 9090}
                                :app {:http-server 9090}}}
@@ -96,14 +96,15 @@
                  (select-keys [::ds/instances])))))))
 
 (deftest system-merge
-  (let [handlers {:init (fn [{:keys [port] :as res} _ _]
+  (let [handlers {:init (fn [{:keys [port]} _ _]
                           port)}]
     (is (= #::ds{:defs {:env {:http-port {:init 9090}}
                         :app {:http-server (merge {:port (ds/ref [:env :http-port])}
                                                   handlers)}}}
-           (ds/system-merge
-            #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
-                                             handlers]}}}
-            #::ds{:defs {:env {:http-port {:init 9090}}}})))))
+           (-> (ds/system-merge
+                #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
+                                                 handlers]}}}
+                #::ds{:defs {:env {:http-port {:init 9090}}}})
+               (select-keys [::ds/defs]))))))
 
 (deftest validate-component)

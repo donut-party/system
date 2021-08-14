@@ -232,10 +232,11 @@
 
 (defn initialize-system
   [maybe-system]
-  (->> (mm/meta-merge
-        maybe-system
-        ^:displace {::component-order default-component-order})
-       merge-component-defs))
+  (->> (merge {::component-order default-component-order}
+              maybe-system)
+       merge-component-defs
+       apply-base
+       gen-graph))
 
 (defn- clean-after-signal-apply
   [system]
@@ -243,10 +244,7 @@
 
 (defn signal
   [system signal-name]
-  (let [{:keys [::component-order] :as system} (-> system
-                                                   (initialize-system)
-                                                   (apply-base)
-                                                   (gen-graph))
+  (let [{:keys [::component-order] :as system} (initialize-system system)
         order                                  (get component-order
                                                     signal-name
                                                     identity)]
