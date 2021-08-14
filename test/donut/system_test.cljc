@@ -2,7 +2,8 @@
   (:require [donut.system :as ds]
             [loom.graph :as lg]
             #?(:clj [clojure.test :refer [deftest is testing]]
-               :cljs [cljs.test :refer [deftest is testing] :include-macros true])))
+               :cljs [cljs.test :refer [deftest is testing] :include-macros true])
+            [malli.core :as m]))
 
 (deftest apply-base-test
   (is (= #::ds{:base {:app {:init-before [:foo]}}
@@ -107,4 +108,30 @@
                 #::ds{:defs {:env {:http-port {:init 9090}}}})
                (select-keys [::ds/defs]))))))
 
-(deftest validate-component)
+(deftest validate-component
+  (let [schema (m/schema int?)]
+    (is (= #::ds{:out {:info {:env {:http-port {:init-after
+                                                {:schema schema
+                                                 :value  "9090"
+                                                 :errors [{:path    []
+                                                           :in      []
+                                                           :schema  schema
+                                                           :value   "9090"
+                                                           :type    nil
+                                                           :message nil}]}}}}}}
+           (-> #::ds{:base
+                     {:env {:init-after (fn [{:keys [schema]} instance-val {:keys [->info]}]
+                                          (some-> (and schema (m/explain schema instance-val))
+                                                  ->info))}}
+
+                     :defs
+                     {:env
+                      {:http-port {:init   "9090"
+                                   :schema schema}}
+
+                      :app
+                      {:http-server {:port (ds/ref [:env :http-port])
+                                     :init (fn [{:keys [port]} _ _]
+                                             port)}}}}
+               (ds/signal :init)
+               (select-keys [::ds/out]))))))

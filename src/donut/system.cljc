@@ -24,8 +24,10 @@
 (def DonutSystem
   [:map
    [::defs ComponentDefGroups]
-   [::graph any?]
-   [::instances any?]])
+   [::base {:optional true} [:map]]
+   [::resolved {:optional true} [:map]]
+   [::graph {:optional true} any?]
+   [::instances {:optional true} any?]])
 
 (def system? (m/validator DonutSystem))
 
@@ -134,18 +136,15 @@
 
 (defn channel-fn
   [system channel component-id stage-name]
-  #(assoc-in system
-    (-> channel
-        (into component-id)
-        (conj stage-name))
-    %1))
+  #(sp/setval [channel component-id stage-name] % system))
 
 (defn- channel-fns
   [system component-id stage-name]
-  {:->info     (channel-fn system [::out :info] component-id stage-name)
-   :->error    (channel-fn system [::out :error] component-id stage-name)
-   :->warn     (channel-fn system [::out :warn] component-id stage-name)
-   :->instance (channel-fn system [::instances] component-id stage-name)})
+  {:->info       (channel-fn system [::out :info] component-id stage-name)
+   :->error      (channel-fn system [::out :error] component-id stage-name)
+   :->warn       (channel-fn system [::out :warn] component-id stage-name)
+   :->validation (channel-fn system [::out :validation] component-id stage-name)
+   :->instance   (channel-fn system [::instances] component-id stage-name)})
 
 (defn- system-identity
   [_ _ system]
