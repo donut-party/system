@@ -157,8 +157,8 @@
     (fn [system]
       (if (continue-applying-signal? system)
         (let [stage-result (base-fn
-                            (sp/select-one [::instances component-id] system)
                             (sp/select-one [::resolved component-id] system)
+                            (sp/select-one [::instances component-id] system)
                             (merge system
                                    (channel-fns system
                                                 component-id
@@ -181,8 +181,8 @@
       (around-f
        (if (continue-applying-signal? system)
          (let [stage-result (signal-apply-fn
-                             (sp/select-one [::instances component-id] system)
                              (sp/select-one [::resolved component-id] system)
+                             (sp/select-one [::instances component-id] system)
                              (merge system
                                     (channel-fns system
                                                  component-id

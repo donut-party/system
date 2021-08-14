@@ -59,8 +59,8 @@
 
   (is (= #::ds{:instances {:app {:boop "boop and boop again"}}}
          (-> #::ds{:defs {:app {:boop {:init "boop"
-                                       :halt (fn [c _ _]
-                                               (str c " and boop again"))}}}}
+                                       :halt (fn [_ instance _]
+                                               (str instance " and boop again"))}}}}
              (ds/signal :init)
              (ds/signal :halt)
              (select-keys [::ds/instances])))))
@@ -71,7 +71,7 @@
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port {:init 9090}}
                             :app {:http-server {:port (ds/ref [:env :http-port])
-                                                :init (fn [_ {:keys [port] :as res} _]
+                                                :init (fn [{:keys [port] :as res} _ _]
                                                         port)}}}}
                (ds/signal :init)
                (select-keys [::ds/instances]))))))
@@ -79,5 +79,5 @@
 
 {:defs {:env {:http-port {:handlers {:init 9090}}}
         :app {:http-server {:deps     {:port (ds/ref [:env :http-port])}
-                            :handlers {:init (fn [_ {:keys [port]} _]
+                            :handlers {:init (fn [{:keys [port]} _ _]
                                                port)}}}}}
