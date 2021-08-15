@@ -215,7 +215,7 @@
             (->> computation-node
                  (ld/subgraph-reachable-from graph)
                  (lg/nodes)
-                 (apply lg/remove-nodes)))))
+                 (apply lg/remove-nodes graph)))))
 
 (defn remove-signal-computation-node
   [system computation-node]
@@ -230,7 +230,6 @@
         stage-fn     (or (sp/select-one [::resolved computation-node] system)
                          system-identity)]
     (fn [system]
-      (prn "handling" computation-node)
       (let [stage-result (apply-stage-fn system stage-fn component-id)]
         (if (system? stage-result)
           stage-result
@@ -249,7 +248,7 @@
                        (constantly signal-fn))
         around-fn    (->> signal-name
                           handler-lifecycle-names
-                          :after
+                          :around
                           (conj component-id)
                           (handler-stage-fn system))]
     (fn [system]
