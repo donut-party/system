@@ -70,47 +70,48 @@
      (mm/meta-merge (group-name base) component-config))
    system))
 
-(defn- gen-graph-add-nodes
+(defn- component-graph-nodes
   [system]
-  (assoc system
-         ::graph
-         (->> system
-              (sp/select [config-collect-group-path sp/MAP-KEYS])
-              (reduce (fn [graph node]
-                        (lg/add-nodes graph node))
-                      (lg/digraph)))))
+  (->> system
+       (sp/select [config-collect-group-path sp/MAP-KEYS])
+       (reduce (fn [graph node]
+                 (lg/add-nodes graph node))
+               (lg/digraph))))
 
 (defn- ref-edges
-  [system]
+  [system direction]
   (->> system
        expand-refs
        (sp/select [config-collect-group-path
                    sp/ALL (sp/collect-one sp/FIRST) sp/LAST
                    (sp/walker ref?) :key])
        (map (fn [[group-name component-name key]]
-              [[group-name component-name]
-               key]))))
+              (if (= :topsort direction)
+                [[group-name component-name]
+                 key]
+                [key
+                 [group-name component-name]])))))
 
-(defn- gen-graph-add-edges
-  [system]
-  (update system
-          ::graph
-          (fn [graph]
-            (->> system
-                 ref-edges
-                 (reduce (fn [graph edge]
-                           (lg/add-edges graph edge))
-                         graph)))))
+(defn- component-graph-add-edges
+  [graph system direction]
+  (reduce (fn [graph edge]
+            (lg/add-edges graph edge))
+          graph
+          (ref-edges system direction)))
 
 (defn gen-graphs
   [system]
-  (-> (gen-graph-add-nodes system)
-      (gen-graph-add-edges)))
+  (let [g (component-graph-nodes system)]
+    (-> system
+        (assoc-in [::graphs :topsort]
+                  (component-graph-add-edges g system :topsort))
+        (assoc-in [::graphs :reverse-topsort]
+                  (component-graph-add-edges g system :reverse-topsort)))))
 
 (def default-component-order
-  "Function to be applied on the topsorted graph of components"
-  {:init   reverse
-   :resume reverse})
+  "which graph to follow to apply signal"
+  {:init   :reverse-topsort
+   :resume :reverse-topsort})
 
 (defn strk
   "Like `str` but with keywords"
@@ -243,12 +244,10 @@
 (defn signal
   [system signal-name]
   (let [{:keys [::component-order] :as system} (initialize-system system)
-        order                                  (get component-order
-                                                    signal-name
-                                                    identity)]
+        order                                  (get component-order signal-name :topsort)]
     (clean-after-signal-apply
      (loop [system               system
-            [component-id & ids] (order (la/topsort (::graph system)))]
+            [component-id & ids] (la/topsort (get-in system [::graphs order]))]
        (if component-id
          (recur (apply-signal-to-component system component-id signal-name)
                 ids)

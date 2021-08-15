@@ -4,7 +4,8 @@
             #?(:clj [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [malli.core :as m]
-            [malli.impl.util :as miu]))
+            [malli.impl.util :as miu]
+            [loom.alg :as la]))
 
 (deftest apply-base-test
   (is (= #::ds{:base {:app {:init-before [:foo]}}
@@ -38,26 +39,21 @@
   (is (= [[[:env :http-port] [:env :bar]]
           [[:app :http-server] [:env :http-port]]]
          (#'ds/ref-edges #::ds{:defs {:env {:http-port {:deps {:x (ds/ref :bar)}}}
-                                      :app {:http-server {:deps {:port (ds/ref [:env :http-port])}}}}}))))
+                                      :app {:http-server {:deps {:port (ds/ref [:env :http-port])}}}}}
+                         :topsort))))
 
 (deftest gen-graphs-test
-  (let [system #::ds{:defs {:env {:http-port nil}
-                            :app {:http-server nil}}}]
-    (is (= (assoc system ::ds/graph (-> (lg/digraph)
-                                        (lg/add-nodes [:env :http-port]
-                                                      [:app :http-server])))
-           (ds/gen-graphs system))))
-
-  (let [system #::ds{:defs {:env {:port-source nil
-                                  :http-port   (ds/ref :port-source)}
-                            :app {:http-server {:port (ds/ref [:env :http-port])}}}}]
-    (is (= (assoc system ::ds/graph (-> (lg/digraph)
-                                        (lg/add-nodes [:env :http-port]
-                                                      [:env :port-source]
-                                                      [:app :http-server])
-                                        (lg/add-edges [[:env :http-port] [:env :port-source]]
-                                                      [[:app :http-server] [:env :http-port]])))
-           (ds/gen-graphs system)))))
+  (let [system (ds/gen-graphs #::ds{:defs {:env {:port-source nil
+                                                 :http-port   (ds/ref :port-source)}
+                                           :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
+    (is (= [[:app :http-server]
+            [:env :http-port]
+            [:env :port-source]]
+           (la/topsort (get-in system [::ds/graphs :topsort]))))
+    (is (= [[:env :port-source]
+            [:env :http-port]
+            [:app :http-server]]
+           (la/topsort (get-in system [::ds/graphs :reverse-topsort]))))))
 
 (deftest simple-signal-test
   (is (= #::ds{:instances {:app {:boop "boop"}}}
