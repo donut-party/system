@@ -40,13 +40,13 @@
          (#'ds/ref-edges #::ds{:defs {:env {:http-port {:deps {:x (ds/ref :bar)}}}
                                       :app {:http-server {:deps {:port (ds/ref [:env :http-port])}}}}}))))
 
-(deftest gen-graph-test
+(deftest gen-graphs-test
   (let [system #::ds{:defs {:env {:http-port nil}
                             :app {:http-server nil}}}]
     (is (= (assoc system ::ds/graph (-> (lg/digraph)
                                         (lg/add-nodes [:env :http-port]
                                                       [:app :http-server])))
-           (ds/gen-graph system))))
+           (ds/gen-graphs system))))
 
   (let [system #::ds{:defs {:env {:port-source nil
                                   :http-port   (ds/ref :port-source)}
@@ -57,7 +57,7 @@
                                                       [:app :http-server])
                                         (lg/add-edges [[:env :http-port] [:env :port-source]]
                                                       [[:app :http-server] [:env :http-port]])))
-           (ds/gen-graph system)))))
+           (ds/gen-graphs system)))))
 
 (deftest simple-signal-test
   (is (= #::ds{:instances {:app {:boop "boop"}}}

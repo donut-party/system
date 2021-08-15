@@ -7,6 +7,9 @@
    [malli.core :as m]
    [meta-merge.core :as mm]))
 
+;; TODO specs for:
+;; - component id (group name, component name)
+
 (def ComponentDefinition
   [:map])
 
@@ -59,6 +62,7 @@
                          r)))))
 
 (defn- apply-base
+  "merge common component configs"
   [{:keys [::base] :as system}]
   (sp/transform
    [config-collect-group-path sp/MAP-VALS]
@@ -98,7 +102,7 @@
                            (lg/add-edges graph edge))
                          graph)))))
 
-(defn gen-graph
+(defn gen-graphs
   [system]
   (-> (gen-graph-add-nodes system)
       (gen-graph-add-edges)))
@@ -230,7 +234,7 @@
               maybe-system)
        merge-component-defs
        apply-base
-       gen-graph))
+       gen-graphs))
 
 (defn- clean-after-signal-apply
   [system]
