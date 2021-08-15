@@ -70,6 +70,10 @@
      (mm/meta-merge (group-name base) component-config))
    system))
 
+;;---
+;;; generate component graphs
+;;---
+
 (defn- component-graph-nodes
   [system]
   (->> system
@@ -113,6 +117,10 @@
   {:init   :reverse-topsort
    :resume :reverse-topsort})
 
+;;---
+;;; signal application
+;;---
+
 (defn strk
   "Like `str` but with keywords"
   [& xs]
@@ -122,7 +130,7 @@
                       (if (keyword? x)
                         (subs (str x) 1)
                         x)))
-        "")
+               "")
        keyword))
 
 (defn- continue-applying-signal?
@@ -218,6 +226,31 @@
         around
         after
         (assoc :signal signal-name))))
+
+;;---
+;;; computation graph
+;;---
+
+(defn gen-computation-graph
+  [system signal order]
+  (let [component-graph        (get-in system [::graphs order])
+        {:keys [before after]} (handler-lifecycle-names signal)]
+    (reduce (fn [computation-graph component-node]
+              (let [;; generate nodes and edges just for the lifecycle of this
+                    ;; component's signal handler
+                    computation-graph (->> [before signal after]
+                                           (map #(conj component-node %))
+                                           (partition 2 1)
+                                           (apply lg/add-edges computation-graph))
+                    successors        (lg/successors component-graph component-node)]
+                (reduce (fn [computation-graph successor-component-node]
+                          (lg/add-edges computation-graph
+                                        [(conj component-node after)
+                                         (conj successor-component-node before)]))
+                        computation-graph
+                        successors)))
+            (lg/digraph)
+            (la/topsort component-graph))))
 
 (defn- merge-component-defs
   "Components defined as vectors of maps get merged into a single map"

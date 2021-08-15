@@ -129,3 +129,16 @@
                                              port)}}}}
                (ds/signal :init)
                (select-keys [::ds/out]))))))
+
+(deftest gen-computation-graph-test
+  (let [system (ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
+                                           :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
+    (is (= (->> [[:env :http-port :init-before]
+                 [:env :http-port :init]
+                 [:env :http-port :init-after]
+                 [:app :http-server :init-before]
+                 [:app :http-server :init]
+                 [:app :http-server :init-after]]
+                (partition 2 1)
+                (apply lg/add-edges (lg/digraph)))
+           (ds/gen-computation-graph system :init :reverse-topsort)))))
