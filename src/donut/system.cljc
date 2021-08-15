@@ -3,6 +3,7 @@
   (:require
    [com.rpl.specter :as sp]
    [loom.alg :as la]
+   [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
    [meta-merge.core :as mm]))
@@ -133,13 +134,6 @@
                "")
        keyword))
 
-(defn- continue-applying-signal?
-  [system]
-  (-> system
-      ::out
-      :errors
-      empty?))
-
 (defn- handler-lifecycle-names
   [signal-name]
   {:apply-signal signal-name
@@ -163,75 +157,11 @@
   [_ _ system]
   system)
 
-(defn- handler-stage-fn
-  [base-fn component-id]
-  (let [base-fn (or base-fn system-identity)]
-    (fn [system]
-      (if (continue-applying-signal? system)
-        (let [stage-result (base-fn
-                            (sp/select-one [::resolved component-id] system)
-                            (sp/select-one [::instances component-id] system)
-                            (merge system
-                                   (channel-fns system component-id)))]
-          ;; if before or after returns a non-system, disregard it. this
-          ;; accommodates side-effecting fns where we almost always want to ignore
-          ;; the return value
-          (if (system? stage-result)
-            stage-result
-            system))
-        system))))
-
-(defn- around-fn
-  [around-f signal-apply-fn component-id]
-  (fn [system]
-    (let [around-f        (handler-stage-fn around-f component-id)
-          signal-apply-fn (if (fn? signal-apply-fn)
-                            signal-apply-fn
-                            (constantly signal-apply-fn))]
-      (around-f
-       (if (continue-applying-signal? system)
-         (let [stage-result (signal-apply-fn
-                             (sp/select-one [::resolved component-id] system)
-                             (sp/select-one [::instances component-id] system)
-                             (merge system
-                                    (channel-fns system component-id)))]
-           ;; by default the signal apply fn updates the component's instance
-           (if (system? stage-result)
-             stage-result
-             (assoc-in system (into [::instances] component-id) stage-result)))
-         system)))))
-
-(defn- handler-lifecycle
-  [system component-id signal-name]
-  (let [component-handlers (sp/select-one [::resolved component-id] system)
-        {:keys [apply-signal
-                before
-                around
-                after]}
-        (handler-lifecycle-names signal-name)]
-    {:around (around-fn (around component-handlers)
-                        (apply-signal component-handlers)
-                        component-id)
-     :before (handler-stage-fn (before component-handlers) component-id)
-     :after  (handler-stage-fn (after component-handlers) component-id)}))
-
-(defn apply-signal-to-component
-  [system component-id signal-name]
-  (let [system                        (resolve-refs system component-id)
-        {:keys [before around after]} (handler-lifecycle system
-                                                         component-id
-                                                         signal-name)]
-    (-> system
-        before
-        around
-        after
-        (assoc :signal signal-name))))
-
 ;;---
 ;;; computation graph
 ;;---
 
-(defn gen-computation-graph
+(defn gen-signal-computation-graph
   [system signal order]
   (let [component-graph        (get-in system [::graphs order])
         {:keys [before after]} (handler-lifecycle-names signal)]
@@ -251,6 +181,111 @@
                         successors)))
             (lg/digraph)
             (la/topsort component-graph))))
+
+(defn init-signal-computation-graph
+  [system signal]
+  (assoc system
+         ::signal-computation-graph
+         (gen-signal-computation-graph system
+                                       signal
+                                       (get-in system
+                                               [::component-order signal]
+                                               :topsort))))
+
+(defn around-stage?
+  [stage]
+  (not (re-find #"(-before$|-after$)" (str stage))))
+
+(defn- apply-stage-fn
+  [system stage-fn component-id]
+  (stage-fn (sp/select-one [::resolved component-id] system)
+            (sp/select-one [::instances component-id] system)
+            (merge system (channel-fns system component-id))))
+
+(defn- stage-result-valid?
+  [system]
+  (not (or (sp/select-one [::out :errors] system)
+           (sp/select-one [::out :validation] system))))
+
+(defn prune-signal-computation-graph
+  [system computation-node]
+  (update system
+          ::signal-computation-graph
+          (fn [graph]
+            (->> computation-node
+                 (ld/subgraph-reachable-from graph)
+                 (lg/nodes)
+                 (apply lg/remove-nodes)))))
+
+(defn remove-signal-computation-node
+  [system computation-node]
+  (update system
+          ::signal-computation-graph
+          lg/remove-nodes
+          computation-node))
+
+(defn handler-stage-fn
+  [system computation-node]
+  (let [component-id (vec (take 2 computation-node))
+        stage-fn     (or (sp/select-one [::resolved computation-node] system)
+                         system-identity)]
+    (fn [system]
+      (prn "handling" computation-node)
+      (let [stage-result (apply-stage-fn system stage-fn component-id)]
+        (if (system? stage-result)
+          stage-result
+          system)))))
+
+(defn around-stage-fn
+  "computation node will be e.g. [:env :http-port :init]"
+  [system computation-node]
+  (let [component-id (vec (take 2 computation-node))
+        signal-name  (last computation-node)
+        signal-fn    (or (sp/select-one [::resolved computation-node] system)
+                         system-identity)
+        ;; accomodate setting a constant value for a signal
+        signal-fn    (if (fn? signal-fn)
+                       signal-fn
+                       (constantly signal-fn))
+        around-fn    (->> signal-name
+                          handler-lifecycle-names
+                          :after
+                          (conj component-id)
+                          (handler-stage-fn system))]
+    (fn [system]
+      (around-fn
+       (let [stage-result (apply-stage-fn system signal-fn component-id)]
+         (if (system? stage-result)
+           stage-result
+           (sp/setval [::instances component-id] stage-result system)))))))
+
+(defn- computation-stage-fn
+  [system [_ _ stage :as computation-node]]
+  (if (around-stage? stage)
+    (around-stage-fn system computation-node)
+    (handler-stage-fn system computation-node)))
+
+(defn apply-signal-stage
+  [system computation-node]
+  (let [component-id (vec (take 2 computation-node))
+        new-system ((computation-stage-fn (resolve-refs system component-id)
+                                          computation-node)
+                    system)]
+    (if (stage-result-valid? new-system)
+      (remove-signal-computation-node new-system computation-node)
+      (prune-signal-computation-graph new-system computation-node))))
+
+(defn apply-signal-computation-graph
+  [system]
+  (loop [{:keys [::signal-computation-graph] :as system} system]
+    (let [[computation-node] (la/topsort signal-computation-graph)]
+      (if-not computation-node
+        system
+        (recur (apply-signal-stage system computation-node))))))
+
+;;---
+;;; init, apply, etc
+;;---
 
 (defn- merge-component-defs
   "Components defined as vectors of maps get merged into a single map"
@@ -276,15 +311,11 @@
 
 (defn signal
   [system signal-name]
-  (let [{:keys [::component-order] :as system} (initialize-system system)
-        order                                  (get component-order signal-name :topsort)]
-    (clean-after-signal-apply
-     (loop [system               system
-            [component-id & ids] (la/topsort (get-in system [::graphs order]))]
-       (if component-id
-         (recur (apply-signal-to-component system component-id signal-name)
-                ids)
-         system)))))
+  (-> system
+      initialize-system
+      (init-signal-computation-graph signal-name)
+      (apply-signal-computation-graph)
+      (clean-after-signal-apply)))
 
 (defn system-merge
   [& systems]
