@@ -268,9 +268,9 @@
 (defn apply-signal-stage
   [system computation-node]
   (let [component-id (vec (take 2 computation-node))
-        new-system ((computation-stage-fn (resolve-refs system component-id)
-                                          computation-node)
-                    system)]
+        system       (resolve-refs system component-id)
+        new-system   ((computation-stage-fn system computation-node)
+                      system)]
     (if (stage-result-valid? new-system)
       (remove-signal-computation-node new-system computation-node)
       (prune-signal-computation-graph new-system computation-node))))
