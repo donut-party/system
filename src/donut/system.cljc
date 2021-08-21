@@ -138,8 +138,7 @@
   [signal-name]
   {:apply-signal signal-name
    :before       (strk signal-name :-before)
-   :after        (strk signal-name :-after)
-   :around       (strk signal-name :-around)})
+   :after        (strk signal-name :-after)})
 
 (defn channel-fn
   [system channel component-id]
@@ -192,7 +191,7 @@
                                                [::component-order signal]
                                                :topsort))))
 
-(defn around-stage?
+(defn signal-stage?
   [stage]
   (not (re-find #"(-before$|-after$)" (str stage))))
 
@@ -235,33 +234,26 @@
           stage-result
           system)))))
 
-(defn around-stage-fn
+(defn signal-stage-fn
   "computation node will be e.g. [:env :http-port :init]"
   [system computation-node]
   (let [component-id (vec (take 2 computation-node))
-        signal-name  (last computation-node)
         signal-fn    (or (sp/select-one [::resolved computation-node] system)
                          system-identity)
         ;; accomodate setting a constant value for a signal
         signal-fn    (if (fn? signal-fn)
                        signal-fn
-                       (constantly signal-fn))
-        around-fn    (->> signal-name
-                          handler-lifecycle-names
-                          :around
-                          (conj component-id)
-                          (handler-stage-fn system))]
+                       (constantly signal-fn))]
     (fn [system]
-      (around-fn
-       (let [stage-result (apply-stage-fn system signal-fn component-id)]
-         (if (system? stage-result)
-           stage-result
-           (sp/setval [::instances component-id] stage-result system)))))))
+      (let [stage-result (apply-stage-fn system signal-fn component-id)]
+        (if (system? stage-result)
+          stage-result
+          (sp/setval [::instances component-id] stage-result system))))))
 
 (defn- computation-stage-fn
   [system [_ _ stage :as computation-node]]
-  (if (around-stage? stage)
-    (around-stage-fn system computation-node)
+  (if (signal-stage? stage)
+    (signal-stage-fn system computation-node)
     (handler-stage-fn system computation-node)))
 
 (defn apply-signal-stage
