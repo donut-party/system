@@ -93,7 +93,7 @@
                  (ds/signal :init)
                  (select-keys [::ds/instances])))))))
 
-(deftest system-merge
+(deftest system-merge-test
   (let [handlers {:init (fn [{:keys [port]} _ _]
                           port)}]
     (is (= #::ds{:defs {:env {:http-port {:init 9090}}
@@ -129,6 +129,24 @@
                                              port)}}}}
                (ds/signal :init)
                (select-keys [::ds/out]))))))
+
+(deftest lifecycle-values-ignored-when-not-system
+  (let [expected #::ds{:instances {:env {:http-port 9090}
+                                   :app {:http-server 9090}}}
+        system   #::ds{:defs {:env {:http-port {:init 9090}}
+                              :app {:http-server {:port        (ds/ref [:env :http-port])
+                                                  :init        (fn [{:keys [port]} _ _]
+                                                                 port)}}}}]
+    (is (= expected
+           (->  system
+                (ds/system-merge #::ds{:defs {:app {:http-server {:init-before (constantly nil)}}}})
+                (ds/signal :init)
+                (select-keys [::ds/instances]))))
+    (is (= expected
+           (->  system
+                (ds/system-merge #::ds{:defs {:app {:http-server {:init-after (constantly nil)}}}})
+                (ds/signal :init)
+                (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
   (let [system (ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
