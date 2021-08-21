@@ -99,3 +99,24 @@
 
           :server-2 [server-component-group
                      {:req-handler {:handlers {:init (constantly (fn req-handler-2 [req] req))}}}]}})
+
+
+;;---
+;;; groups
+;;---
+
+#::ds{:defs
+      {:env
+       {:app-name "foo.app"}
+
+       :common-services
+       {:job-queue {:init "job queue"}
+        :db        {:init "db"}}
+
+       :sub-systems
+       {:system-1 (ds/subsystem
+                   #::ds{:defs {:app {:job-queue (ds/ref [:common-services :job-queue])
+                                      :db        (ds/ref [:common-services :db])}}})
+        :system-2 (ds/subsystem
+                   #::ds{:defs {:app {:job-queue (ds/ref [:common-services :job-queue])
+                                      :db        (ds/ref [:common-services :db])}}})}}}

@@ -160,3 +160,44 @@
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
            (ds/gen-signal-computation-graph system :init :reverse-topsort)))))
+
+
+(deftest subsystem-test
+  (let [subsystem #::ds{:defs
+                        {:app
+                         {:server {:job-queue (ds/ref [:common-services :job-queue])
+                                   :db        (ds/ref [:common-services :db])
+                                   :init      (fn [resolved _ _]
+                                                (select-keys resolved [:job-queue :db]))
+                                   :halt      (fn [_ instance _]
+                                                {:prev instance
+                                                 :now  :halted})}}}}
+
+        inited (-> #::ds{:defs
+                         {:env
+                          {:app-name {:init "foo.app"}}
+
+                          :common-services
+                          {:job-queue {:init "job queue"}
+                           :db        {:init "db"}}
+
+                          :sub-systems
+                          {:system-1 (ds/subsystem subsystem)
+                           :system-2 (ds/subsystem subsystem)}}}
+                   (ds/signal :init))]
+    (is (= {:job-queue "job queue"
+            :db        "db"}
+           (-> inited
+               (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
+           (-> inited
+               (select-keys [::ds/instances])
+               (get-in [::ds/instances :sub-systems :system-2 ::ds/instances :app :server]))))
+
+    (let [halted (ds/signal inited :halt)]
+      (is (= {:prev {:job-queue "job queue"
+                     :db        "db"}
+              :now  :halted}
+             (-> halted
+                 (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
+             (-> halted
+                 (get-in [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))))))

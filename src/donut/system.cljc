@@ -319,3 +319,20 @@
   [{:keys [schema]} instance-val {:keys [->validation]}]
   (some-> (and schema (m/explain schema instance-val))
           ->validation))
+
+(defn forward-init
+  [signal-name]
+  (fn [resolved _ {:keys [->instance]}]
+    (->instance (signal (:system-def resolved) signal-name))))
+
+(defn forward-update
+  [signal-name]
+  (fn [_ instance {:keys [->instance]}]
+    (->instance (signal instance signal-name))))
+
+(defn subsystem
+  [system-def]
+  {:system-def system-def
+   :init       (forward-init :init)
+   :halt       (forward-update :halt)
+   :resume     (forward-update :resume)})
