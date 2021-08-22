@@ -39,8 +39,7 @@
 (defn ref? [x] (instance? Ref x))
 (defn ref [k] (->Ref k))
 
-(defn- resolve-refs
-  "resolve component def to ::resolved path"
+(defn- default-resolve-refs
   [system component-id]
   (->> system
        (sp/setval [::resolved component-id]
@@ -48,6 +47,13 @@
        (sp/transform [::resolved component-id (sp/walker ref?)]
                      (fn [{:keys [key]}]
                        (sp/select-one [::instances key] system)))))
+
+(defn- resolve-refs
+  "resolve component def to ::resolved path"
+  [system component-id]
+  (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
+    (resolution-fn system component-id)
+    (default-resolve-refs system component-id)))
 
 (def config-collect-group-path
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
@@ -310,8 +316,8 @@
 
 (defn system-merge
   [& systems]
-  (reduce (fn [system system-def]
-            (mm/meta-merge system (initialize-system system-def)))
+  (reduce (fn [system subsystem]
+            (mm/meta-merge system (initialize-system subsystem)))
           {}
           systems))
 
@@ -320,19 +326,51 @@
   (some-> (and schema (m/explain schema instance-val))
           ->validation))
 
+;;---
+;;; subsystems
+;;---
+
+(defn- imports->refs
+  [imports]
+  (reduce (fn [refs ref-key]
+            (assoc refs ref-key (ref ref-key)))
+          {}
+          imports))
+
+(defn- merge-imports
+  [{:keys [::imports] :as system-component} parent-system]
+  (reduce (fn [system {:keys [key]}]
+            (sp/setval [::subsystem ::instances key]
+                       (sp/select-one [::instances key] parent-system)
+                       system))
+          system-component
+          imports))
+
+(defn- subsystem-resolver
+  [parent-system component-id]
+  (->> (default-resolve-refs parent-system component-id)
+       (sp/setval [::resolved component-id ::subsystem]
+                  (sp/select-one [::defs component-id ::subsystem] parent-system))
+       (sp/transform [::resolved component-id]
+                     (fn [system]
+                       (merge-imports system parent-system)))))
+
 (defn forward-init
   [signal-name]
   (fn [resolved _ {:keys [->instance]}]
-    (->instance (signal (:system-def resolved) signal-name))))
+    (->instance (signal (::subsystem resolved) signal-name))))
 
 (defn forward-update
   [signal-name]
   (fn [_ instance {:keys [->instance]}]
     (->instance (signal instance signal-name))))
 
-(defn subsystem
-  [system-def]
-  {:system-def system-def
-   :init       (forward-init :init)
-   :halt       (forward-update :halt)
-   :resume     (forward-update :resume)})
+(defn subsystem-component
+  [subsystem & [imports]]
+  {:init   (forward-init :init)
+   :halt   (forward-update :halt)
+   :resume (forward-update :resume)
+
+   ::subsystem    subsystem
+   ::imports      (imports->refs imports)
+   ::resolve-refs subsystem-resolver})

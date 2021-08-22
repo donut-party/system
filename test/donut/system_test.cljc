@@ -164,11 +164,14 @@
 
 (deftest subsystem-test
   (let [subsystem #::ds{:defs
-                        {:app
+                        {:local {:port {:init 9090}}
+
+                         :app
                          {:server {:job-queue (ds/ref [:common-services :job-queue])
                                    :db        (ds/ref [:common-services :db])
+                                   :port      (ds/ref [:local :port])
                                    :init      (fn [resolved _ _]
-                                                (select-keys resolved [:job-queue :db]))
+                                                (select-keys resolved [:job-queue :db :port]))
                                    :halt      (fn [_ instance _]
                                                 {:prev instance
                                                  :now  :halted})}}}}
@@ -182,11 +185,18 @@
                            :db        {:init "db"}}
 
                           :sub-systems
-                          {:system-1 (ds/subsystem subsystem)
-                           :system-2 (ds/subsystem subsystem)}}}
+                          {:system-1 (ds/subsystem-component
+                                      subsystem
+                                      #{[:common-services :job-queue]
+                                        [:common-services :db]})
+                           :system-2 (ds/subsystem-component
+                                      subsystem
+                                      #{[:common-services :job-queue]
+                                        [:common-services :db]})}}}
                    (ds/signal :init))]
     (is (= {:job-queue "job queue"
-            :db        "db"}
+            :db        "db"
+            :port      9090}
            (-> inited
                (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
            (-> inited
@@ -195,7 +205,8 @@
 
     (let [halted (ds/signal inited :halt)]
       (is (= {:prev {:job-queue "job queue"
-                     :db        "db"}
+                     :db        "db"
+                     :port      9090}
               :now  :halted}
              (-> halted
                  (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
