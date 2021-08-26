@@ -40,12 +40,16 @@
 (defn ref? [x] (instance? Ref x))
 (defn ref [k] (->Ref k))
 
+(defrecord GroupRef [key])
+(defn group-ref? [x] (instance? GroupRef x))
+(defn group-ref [x] (->GroupRef x))
+
 (defn- default-resolve-refs
   [system component-id]
   (->> system
        (sp/setval [::resolved component-id]
                   (sp/select-one [::defs component-id] system))
-       (sp/transform [::resolved component-id (sp/walker ref?)]
+       (sp/transform [::resolved component-id (sp/walker (some-fn ref? group-ref?))]
                      (fn [{:keys [key]}]
                        (sp/select-one [::instances key] system)))))
 

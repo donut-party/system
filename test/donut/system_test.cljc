@@ -80,6 +80,20 @@
                (ds/signal :init)
                (select-keys [::ds/instances]))))))
 
+(deftest group-ref-test
+  (testing "referred group is passed to referrer"
+    (is (= #::ds{:instances {:env {:http-port 9090
+                                   :timeout   5000}
+                             :app {:http-server {:http-port 9090
+                                                 :timeout   5000}}}}
+           (-> #::ds{:defs {:env {:http-port {:init 9090}
+                                  :timeout   {:init 5000}}
+                            :app {:http-server {:env  (ds/group-ref :env)
+                                                :init (fn [{:keys [env]} _ _]
+                                                        env)}}}}
+               (ds/signal :init)
+               (select-keys [::ds/instances]))))))
+
 
 (deftest component-merge-test
   (testing "components can be defined as a vector of maps, in which case they're all merged"
@@ -198,6 +212,7 @@
                                       #{[:common-services :job-queue]
                                         [:common-services :db]})}}}
                    (ds/signal :init))]
+
     (is (= {:job-queue "job queue"
             :db        "db"
             :port      9090}
