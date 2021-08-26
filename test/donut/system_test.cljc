@@ -200,7 +200,6 @@
            (-> inited
                (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
            (-> inited
-               (select-keys [::ds/instances])
                (get-in [::ds/instances :sub-systems :system-2 ::ds/instances :app :server]))))
 
     (let [halted (ds/signal inited :halt)]
