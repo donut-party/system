@@ -31,7 +31,8 @@
    [::base {:optional true} [:map]]
    [::resolved {:optional true} [:map]]
    [::graph {:optional true} any?]
-   [::instances {:optional true} any?]])
+   [::instances {:optional true} any?]
+   [::out {:optional true} [:map]]])
 
 (def system? (m/validator DonutSystem))
 
@@ -262,12 +263,18 @@
     (signal-stage-fn system computation-node)
     (handler-stage-fn system computation-node)))
 
+(defn- prep-system-for-apply-signal-stage
+  [system component-id]
+  (-> system
+      (assoc ::component-id component-id)
+      (resolve-refs component-id)))
+
 (defn apply-signal-stage
   [system computation-node]
-  (let [component-id (vec (take 2 computation-node))
-        system       (resolve-refs system component-id)
-        new-system   ((computation-stage-fn system computation-node)
-                      system)]
+  (let [component-id   (vec (take 2 computation-node))
+        prepped-system (prep-system-for-apply-signal-stage system component-id)
+        new-system     ((computation-stage-fn prepped-system computation-node)
+                        prepped-system)]
     (if (stage-result-valid? new-system)
       (remove-signal-computation-node new-system computation-node)
       (prune-signal-computation-graph new-system computation-node))))
@@ -355,15 +362,38 @@
                      (fn [system]
                        (merge-imports system parent-system)))))
 
-(defn forward-init
+(defn- forward-channel
+  [parent-system channel component-id]
+  (if-let [chan-val (sp/select-one [::instances component-id channel] parent-system)]
+    (sp/setval [channel component-id]
+               chan-val
+               parent-system)
+    parent-system))
+
+(defn- forward-channels
+  [{:keys [::component-id] :as parent-system}]
+  (-> parent-system
+      (forward-channel [::out :info] component-id)
+      (forward-channel [::out :error] component-id)
+      (forward-channel [::out :warn] component-id)
+      (forward-channel [::out :validation] component-id)))
+
+(defn- forward-init
   [signal-name]
   (fn [resolved _ {:keys [->instance]}]
-    (->instance (signal (::subsystem resolved) signal-name))))
+    (-> resolved
+        ::subsystem
+        (signal signal-name)
+        ->instance
+        forward-channels)))
 
-(defn forward-update
+(defn- forward-update
   [signal-name]
   (fn [_ instance {:keys [->instance]}]
-    (->instance (signal instance signal-name))))
+    (-> instance
+        (signal signal-name)
+        ->instance
+        forward-channels)))
 
 (defn subsystem-component
   [subsystem & [imports]]

@@ -167,14 +167,18 @@
                         {:local {:port {:init 9090}}
 
                          :app
-                         {:server {:job-queue (ds/ref [:common-services :job-queue])
-                                   :db        (ds/ref [:common-services :db])
-                                   :port      (ds/ref [:local :port])
-                                   :init      (fn [resolved _ _]
+                         {:server {:job-queue  (ds/ref [:common-services :job-queue])
+                                   :db         (ds/ref [:common-services :db])
+                                   :port       (ds/ref [:local :port])
+                                   :init       (fn [resolved _ _]
                                                 (select-keys resolved [:job-queue :db :port]))
-                                   :halt      (fn [_ instance _]
-                                                {:prev instance
-                                                 :now  :halted})}}}}
+                                   :init-after (fn [_ _ {:keys [->info]}]
+                                                 (->info "inited"))
+                                   :halt       (fn [_ instance _]
+                                                 {:prev instance
+                                                  :now  :halted})
+                                   :halt-after (fn [_ _ {:keys [->info]}]
+                                                 (->info "halted"))}}}}
 
         inited (-> #::ds{:defs
                          {:env
@@ -197,17 +201,20 @@
     (is (= {:job-queue "job queue"
             :db        "db"
             :port      9090}
-           (-> inited
-               (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
-           (-> inited
-               (get-in [::ds/instances :sub-systems :system-2 ::ds/instances :app :server]))))
+           (get-in inited [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
+           (get-in inited [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
+    (is (= "inited"
+           (get-in inited [::ds/out :info :sub-systems :system-1 :app :server])
+           (get-in inited [::ds/out :info :sub-systems :system-2 :app :server])))
 
     (let [halted (ds/signal inited :halt)]
       (is (= {:prev {:job-queue "job queue"
                      :db        "db"
                      :port      9090}
               :now  :halted}
-             (-> halted
-                 (get-in [::ds/instances :sub-systems :system-1 ::ds/instances :app :server]))
-             (-> halted
-                 (get-in [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))))))
+             (get-in halted [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
+             (get-in halted [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
+
+      (is (= "halted"
+           (get-in halted [::ds/out :info :sub-systems :system-1 :app :server])
+           (get-in halted [::ds/out :info :sub-systems :system-2 :app :server]))))))
