@@ -63,16 +63,6 @@
 (def config-collect-group-path
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
-(defn- expand-refs
-  "Transforms all refs of a local component name to a full component id"
-  [system]
-  (->> system
-       (sp/transform [config-collect-group-path (sp/walker ref?)]
-                     (fn [group-name r]
-                       (if (keyword? (:key r))
-                         (->Ref [group-name (:key r)])
-                         r)))))
-
 (defn- apply-base
   "merge common component configs"
   [{:keys [::base] :as system}]
@@ -93,6 +83,16 @@
        (reduce (fn [graph node]
                  (lg/add-nodes graph node))
                (lg/digraph))))
+
+(defn- expand-refs
+  "Transforms all refs of a local component name to a full component id"
+  [system]
+  (->> system
+       (sp/transform [config-collect-group-path (sp/walker ref?)]
+                     (fn [group-name r]
+                       (if (keyword? (:key r))
+                         (->Ref [group-name (:key r)])
+                         r)))))
 
 (defn- ref-edges
   [system direction]
