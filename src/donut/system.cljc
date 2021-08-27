@@ -27,12 +27,13 @@
 
 (def DonutSystem
   [:map
-   [::defs ComponentDefGroups]
+   [::defs any?]
    [::base {:optional true} [:map]]
    [::resolved {:optional true} [:map]]
    [::graph {:optional true} any?]
    [::instances {:optional true} any?]
-   [::out {:optional true} [:map]]])
+   [::out {:optional true} [:map]]
+   ])
 
 (def system? (m/validator DonutSystem))
 
@@ -169,9 +170,13 @@
    :before       (strk signal-name :-before)
    :after        (strk signal-name :-after)})
 
-(defn channel-fn
+(defn- channel-fn
   [system channel component-id]
-  #(sp/setval [channel component-id] % system))
+  (fn ->channel
+    ([v]
+     (->channel system v))
+    ([s v]
+     (sp/setval [channel component-id] v s))))
 
 (defn- channel-fns
   [system component-id]
@@ -284,6 +289,7 @@
                     (constantly signal-fn))]
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)]
+
         (if (system? stage-result)
           stage-result
           (sp/setval [::instances component-id] stage-result system))))))

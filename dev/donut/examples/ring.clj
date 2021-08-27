@@ -7,7 +7,6 @@
    {:env  {:http-port 8080
            :app-name  "example"}
     :http {:server  {:init    (fn [{:keys [handler options]} _instance _system]
-                                (prn "startup" handler options)
                                 (rj/run-jetty handler options))
                      :halt    (fn [_ instance _]
                                 (.stop instance))
@@ -15,7 +14,6 @@
                      :options {:port  (ds/ref [:env :http-port])
                                :join? false}}
            :handler (fn [req]
-                      (prn "handler!")
                       {:status  200
                        :headers {"ContentType" "text/html"}
                        :body    "boosh!"})}}})

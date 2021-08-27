@@ -172,9 +172,9 @@
   (let [expected #::ds{:instances {:env {:http-port 9090}
                                    :app {:http-server 9090}}}
         system   #::ds{:defs {:env {:http-port {:init 9090}}
-                              :app {:http-server {:port        (ds/ref [:env :http-port])
-                                                  :init        (fn [{:keys [port]} _ _]
-                                                                 port)}}}}]
+                              :app {:http-server {:port (ds/ref [:env :http-port])
+                                                  :init (fn [{:keys [port]} _ _]
+                                                          port)}}}}]
     (is (= expected
            (->  system
                 (ds/system-merge #::ds{:defs {:app {:http-server {:init-before (constantly nil)}}}})
@@ -200,6 +200,19 @@
            (ds/gen-signal-computation-graph system :init :reverse-topsort)))))
 
 
+(deftest channel-fns-test
+  (testing "can chain channel fns"
+    (is (= #::ds{:instances {:app {:http-server 9090
+                                   :http-port   9090}}
+                 :out {:info {:app {:http-server "info"}}}}
+           (-> #::ds{:defs {:app {:http-server {:port (ds/ref :http-port)
+                                                :init (fn [{:keys [port]} _ {:keys [->instance ->info]}]
+                                                        (-> (->instance port)
+                                                            (->info "info")))}
+                                  :http-port   9090}}}
+               (ds/signal :init)
+               (select-keys [::ds/instances ::ds/out]))))))
+
 (deftest subsystem-test
   (let [subsystem #::ds{:defs
                         {:local {:port {:init 9090}}
@@ -209,7 +222,7 @@
                                    :db         (ds/ref [:common-services :db])
                                    :port       (ds/ref [:local :port])
                                    :init       (fn [resolved _ _]
-                                                (select-keys resolved [:job-queue :db :port]))
+                                                 (select-keys resolved [:job-queue :db :port]))
                                    :init-after (fn [_ _ {:keys [->info]}]
                                                  (->info "inited"))
                                    :halt       (fn [_ instance _]
@@ -255,5 +268,5 @@
              (get-in halted [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
 
       (is (= "halted"
-           (get-in halted [::ds/out :info :sub-systems :system-1 :app :server])
-           (get-in halted [::ds/out :info :sub-systems :system-2 :app :server]))))))
+             (get-in halted [::ds/out :info :sub-systems :system-1 :app :server])
+             (get-in halted [::ds/out :info :sub-systems :system-2 :app :server]))))))
