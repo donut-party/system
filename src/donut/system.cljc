@@ -218,26 +218,26 @@
            (sp/select-one [::out :validation] system))))
 
 (defn prune-signal-computation-graph
-  [system computation-node]
+  [system computation-stage-node]
   (update system
           ::signal-computation-graph
           (fn [graph]
-            (->> computation-node
+            (->> computation-stage-node
                  (ld/subgraph-reachable-from graph)
                  (lg/nodes)
                  (apply lg/remove-nodes graph)))))
 
-(defn remove-signal-computation-node
-  [system computation-node]
+(defn remove-signal-computation-stage-node
+  [system computation-stage-node]
   (update system
           ::signal-computation-graph
           lg/remove-nodes
-          computation-node))
+          computation-stage-node))
 
 (defn handler-stage-fn
-  [system computation-node]
-  (let [component-id (vec (take 2 computation-node))
-        stage-fn     (or (sp/select-one [::resolved computation-node] system)
+  [system computation-stage-node]
+  (let [component-id (vec (take 2 computation-stage-node))
+        stage-fn     (or (sp/select-one [::resolved computation-stage-node] system)
                          system-identity)]
     (fn [system]
       (let [stage-result (apply-stage-fn system stage-fn component-id)]
@@ -247,9 +247,9 @@
 
 (defn signal-stage-fn
   "computation node will be e.g. [:env :http-port :init]"
-  [system computation-node]
-  (let [component-id (vec (take 2 computation-node))
-        signal-fn    (or (sp/select-one [::resolved computation-node] system)
+  [system computation-stage-node]
+  (let [component-id (vec (take 2 computation-stage-node))
+        signal-fn    (or (sp/select-one [::resolved computation-stage-node] system)
                          system-identity)
         ;; accomodate setting a constant value for a signal
         signal-fn    (if (fn? signal-fn)
@@ -262,10 +262,10 @@
           (sp/setval [::instances component-id] stage-result system))))))
 
 (defn- computation-stage-fn
-  [system [_ _ stage :as computation-node]]
+  [system [_ _ stage :as computation-stage-node]]
   (if (signal-stage? stage)
-    (signal-stage-fn system computation-node)
-    (handler-stage-fn system computation-node)))
+    (signal-stage-fn system computation-stage-node)
+    (handler-stage-fn system computation-stage-node)))
 
 (defn- prep-system-for-apply-signal-stage
   [system component-id]
@@ -274,22 +274,22 @@
       (resolve-refs component-id)))
 
 (defn apply-signal-stage
-  [system computation-node]
-  (let [component-id   (vec (take 2 computation-node))
+  [system computation-stage-node]
+  (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
-        new-system     ((computation-stage-fn prepped-system computation-node)
+        new-system     ((computation-stage-fn prepped-system computation-stage-node)
                         prepped-system)]
     (if (stage-result-valid? new-system)
-      (remove-signal-computation-node new-system computation-node)
-      (prune-signal-computation-graph new-system computation-node))))
+      (remove-signal-computation-stage-node new-system computation-stage-node)
+      (prune-signal-computation-graph new-system computation-stage-node))))
 
 (defn apply-signal-computation-graph
   [system]
   (loop [{:keys [::signal-computation-graph] :as system} system]
-    (let [[computation-node] (la/topsort signal-computation-graph)]
-      (if-not computation-node
+    (let [[computation-stage-node] (la/topsort signal-computation-graph)]
+      (if-not computation-stage-node
         system
-        (recur (apply-signal-stage system computation-node))))))
+        (recur (apply-signal-stage system computation-stage-node))))))
 
 ;;---
 ;;; init, apply, etc
