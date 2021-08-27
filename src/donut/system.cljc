@@ -85,14 +85,30 @@
                (lg/digraph))))
 
 (defn- expand-refs
-  "Transforms all refs of a local component name to a full component id"
+  "Expand local and group refs without going into subsystems"
   [system]
-  (->> system
-       (sp/transform [config-collect-group-path (sp/walker ref?)]
-                     (fn [group-name r]
-                       (if (keyword? (:key r))
-                         (->Ref [group-name (:key r)])
-                         r)))))
+  (sp/transform [config-collect-group-path (sp/walker (some-fn ref? group-ref? system?))]
+                (fn [group-name x]
+                  (cond
+                    ;; don't descend into subsystems
+                    (system? x)
+                    x
+
+                    ;; TODO handle group not existing
+                    (group-ref? x)
+                    (let [group-name (:key x)]
+                      {group-name
+                       (->> (sp/select [::defs group-name sp/MAP-KEYS] system)
+                            (reduce (fn [group-map k]
+                                      (assoc group-map k (->Ref [group-name k])))
+                                    {}))})
+
+                    (keyword? (:key x))
+                    (->Ref [group-name (:key x)])
+
+                    :else
+                    x))
+                system))
 
 (defn- ref-edges
   [system direction]
