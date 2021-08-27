@@ -50,8 +50,10 @@
        (sp/setval [::resolved component-id]
                   (sp/select-one [::defs component-id] system))
        (sp/transform [::resolved component-id (sp/walker (some-fn ref? group-ref?))]
-                     (fn [{:keys [key]}]
-                       (sp/select-one [::instances key] system)))))
+                     (fn [{:keys [key] :as r}]
+                       (if (or (group-ref? r) (vector? key))
+                         (sp/select-one [::instances key] system)
+                         (sp/select-one [::instances (first component-id) key] system))))))
 
 (defn- resolve-refs
   "resolve component def to ::resolved path"
@@ -84,7 +86,7 @@
                  (lg/add-nodes graph node))
                (lg/digraph))))
 
-(defn- expand-refs
+(defn- expand-refs-for-graph
   "Expand local and group refs without going into subsystems"
   [system]
   (sp/transform [config-collect-group-path (sp/walker (some-fn ref? group-ref? system?))]
@@ -113,7 +115,7 @@
 (defn- ref-edges
   [system direction]
   (->> system
-       expand-refs
+       expand-refs-for-graph
        (sp/select [config-collect-group-path
                    sp/ALL (sp/collect-one sp/FIRST) sp/LAST
                    (sp/walker ref?) :key])
@@ -278,8 +280,8 @@
 
         ;; accomodate setting a constant value for a signal
         signal-fn (if (fn? signal-fn)
-                                signal-fn
-                                (constantly signal-fn))]
+                    signal-fn
+                    (constantly signal-fn))]
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)]
         (if (system? stage-result)

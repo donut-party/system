@@ -21,11 +21,12 @@
           #::ds{:defs {:app {:http-server [{:foo :bar}
                                            {:baz :bux}]}}}))))
 
-(deftest expand-refs-test
+(deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
                       :app {:http-server {:port (ds/ref [:env :http-port])}}}}
-         (#'ds/expand-refs #::ds{:defs {:env {:http-port {:x (ds/ref :bar)}}
-                                        :app {:http-server {:port (ds/ref [:env :http-port])}}}}))))
+         (#'ds/expand-refs-for-graph
+          #::ds{:defs {:env {:http-port {:x (ds/ref :bar)}}
+                       :app {:http-server {:port (ds/ref [:env :http-port])}}}}))))
 
 (deftest resolve-refs-test
   (is (= #::ds{:defs      {:app {:http-server {:port (ds/ref [:env :http-port])}}}
@@ -77,6 +78,17 @@
                             :app {:http-server {:port (ds/ref [:env :http-port])
                                                 :init (fn [{:keys [port]} _ _]
                                                         port)}}}}
+               (ds/signal :init)
+               (select-keys [::ds/instances]))))))
+
+(deftest local-ref-test
+  (testing "ref of keyword resolves to component in same group"
+    (is (= #::ds{:instances {:app {:http-server 9090
+                                   :http-port   9090}}}
+           (-> #::ds{:defs {:app {:http-server {:port (ds/ref :http-port)
+                                                :init (fn [{:keys [port]} _ _]
+                                                        port)}
+                                  :http-port   9090}}}
                (ds/signal :init)
                (select-keys [::ds/instances]))))))
 
