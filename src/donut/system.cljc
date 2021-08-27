@@ -289,7 +289,6 @@
                     (constantly signal-fn))]
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)]
-
         (if (system? stage-result)
           stage-result
           (sp/setval [::instances component-id] stage-result system))))))
