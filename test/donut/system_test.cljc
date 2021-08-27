@@ -95,6 +95,18 @@
                (select-keys [::ds/instances]))))))
 
 
+
+(deftest signal-constant-test
+  (testing "can forego a map for component def if value should be a constant"
+    (is (= #::ds{:instances {:env {:http-port 9090}
+                             :app {:http-server 9090}}}
+           (-> #::ds{:defs {:env {:http-port 9090}
+                            :app {:http-server {:port (ds/ref [:env :http-port])
+                                                :init (fn [{:keys [port]} _ _]
+                                                        port)}}}}
+               (ds/signal :init)
+               (select-keys [::ds/instances]))))))
+
 (deftest component-merge-test
   (testing "components can be defined as a vector of maps, in which case they're all merged"
     (let [handlers {:init (fn [{:keys [port]} _ _]

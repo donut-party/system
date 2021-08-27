@@ -248,13 +248,22 @@
 (defn signal-stage-fn
   "computation node will be e.g. [:env :http-port :init]"
   [system computation-stage-node]
-  (let [component-id (vec (take 2 computation-stage-node))
-        signal-fn    (or (sp/select-one [::resolved computation-stage-node] system)
-                         system-identity)
+  (let [component-id          (vec (take 2 computation-stage-node))
+        maybe-signal-constant (sp/select-one [::resolved component-id] system)
+        signal-fn             (cond (not maybe-signal-constant)
+                                    system-identity
+
+                                    (map? maybe-signal-constant)
+                                    (or (sp/select-one [::resolved computation-stage-node] system)
+                                        system-identity)
+
+                                    :else
+                                    (constantly maybe-signal-constant))
+
         ;; accomodate setting a constant value for a signal
-        signal-fn    (if (fn? signal-fn)
-                       signal-fn
-                       (constantly signal-fn))]
+        signal-fn (if (fn? signal-fn)
+                                signal-fn
+                                (constantly signal-fn))]
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)]
         (if (system? stage-result)
