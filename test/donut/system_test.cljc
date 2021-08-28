@@ -204,7 +204,7 @@
   (testing "can chain channel fns"
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}
-                 :out {:info {:app {:http-server "info"}}}}
+                 :out       {:info {:app {:http-server "info"}}}}
            (-> #::ds{:defs {:app {:http-server {:port (ds/ref :http-port)
                                                 :init (fn [{:keys [port]} _ {:keys [->instance ->info]}]
                                                         (-> (->instance port)
@@ -215,7 +215,7 @@
 
 (deftest subsystem-test
   (let [subsystem #::ds{:defs
-                        {:local {:port {:init 9090}}
+                        {:local {:port 9090}
 
                          :app
                          {:server {:job-queue  (ds/ref [:common-services :job-queue])
@@ -233,21 +233,21 @@
 
         inited (-> #::ds{:defs
                          {:env
-                          {:app-name {:init "foo.app"}}
+                          {:app-name "foo.app"}
 
                           :common-services
-                          {:job-queue {:init "job queue"}
-                           :db        {:init "db"}}
+                          {:job-queue "job queue"
+                           :db        "db"}
 
                           :sub-systems
                           {:system-1 (ds/subsystem-component
                                       subsystem
-                                      #{[:common-services :job-queue]
-                                        [:common-services :db]})
+                                      #{(ds/ref [:common-services :job-queue])
+                                        (ds/ref [:common-services :db])})
                            :system-2 (ds/subsystem-component
                                       subsystem
-                                      #{[:common-services :job-queue]
-                                        [:common-services :db]})}}}
+                                      #{(ds/ref [:common-services :job-queue])
+                                        (ds/ref [:common-services :db])})}}}
                    (ds/signal :init))]
 
     (is (= {:job-queue "job queue"

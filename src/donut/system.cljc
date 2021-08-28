@@ -347,7 +347,7 @@
 
 (defn- clean-after-signal-apply
   [system]
-  (dissoc system :->error :->info :->instance :->warn))
+  (dissoc system :->error :->info :->instance :->warn :->validation))
 
 (defn signal
   [system signal-name]
@@ -373,10 +373,10 @@
 ;;; subsystems
 ;;---
 
-(defn- imports->refs
+(defn- mapify-imports
   [imports]
-  (reduce (fn [refs ref-key]
-            (assoc refs ref-key (ref ref-key)))
+  (reduce (fn [refmap ref]
+            (assoc-in refmap (:key ref) ref))
           {}
           imports))
 
@@ -438,5 +438,5 @@
    :resume (forward-update :resume)
 
    ::subsystem    subsystem
-   ::imports      (imports->refs imports)
+   ::imports      (mapify-imports imports)
    ::resolve-refs subsystem-resolver})
