@@ -157,7 +157,7 @@
 
 (def default-component-order
   "which graph to follow to apply signal"
-  {:init   :reverse-topsort
+  {:start  :reverse-topsort
    :resume :reverse-topsort})
 
 ;;---
@@ -283,7 +283,7 @@
           system)))))
 
 (defn signal-stage-fn
-  "computation node will be e.g. [:env :http-port :init]"
+  "computation node will be e.g. [:env :http-port :start]"
   [system computation-stage-node]
   (let [component-id          (vec (take 2 computation-stage-node))
         maybe-signal-constant (sp/select-one [::resolved component-id] system)
@@ -351,7 +351,7 @@
                     component-def))
                 system))
 
-(defn initialize-system
+(defn init-system
   [maybe-system]
   (->> (merge {::component-order default-component-order}
               maybe-system)
@@ -366,7 +366,7 @@
 (defn signal
   [system signal-name]
   (-> system
-      initialize-system
+      init-system
       (init-signal-computation-graph signal-name)
       (apply-signal-computation-graph)
       (clean-after-signal-apply)))
@@ -374,7 +374,7 @@
 (defn system-merge
   [& systems]
   (reduce (fn [system subsystem]
-            (mm/meta-merge system (initialize-system subsystem)))
+            (mm/meta-merge system (init-system subsystem)))
           {}
           systems))
 
@@ -428,7 +428,7 @@
       (forward-channel [::out :warn] component-id)
       (forward-channel [::out :validation] component-id)))
 
-(defn- forward-init
+(defn- forward-start
   [signal-name]
   (fn [resolved _ {:keys [->instance]}]
     (-> resolved
@@ -447,9 +447,10 @@
 
 (defn subsystem-component
   [subsystem & [imports]]
-  {:init   (forward-init :init)
-   :halt   (forward-update :halt)
-   :resume (forward-update :resume)
+  {:start   (forward-start :start)
+   :stop    (forward-update :stop)
+   :suspend (forward-update :suspend)
+   :resume  (forward-update :resume)
 
    ::subsystem    subsystem
    ::imports      (mapify-imports imports)

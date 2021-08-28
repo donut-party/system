@@ -6,9 +6,9 @@
   {::ds/defs
    {:env  {:http-port 8080
            :app-name  "example"}
-    :http {:server  {:init    (fn [{:keys [handler options]} _instance _system]
+    :http {:server  {:start   (fn [{:keys [handler options]} _instance _system]
                                 (rj/run-jetty handler options))
-                     :halt    (fn [_ instance _]
+                     :stop    (fn [_ instance _]
                                 (.stop instance))
                      :handler (ds/ref :handler)
                      :options {:port  (ds/ref [:env :http-port])

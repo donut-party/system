@@ -12,14 +12,14 @@
    {:env {:port 9090}
 
     :app
-    {:server {:job-queue  (ds/ref [:common-services :job-queue])
-              :db         (ds/ref [:common-services :db])
-              :port       (ds/ref [:env :port])
-              :init       (fn [resolved _ _]
-                            (select-keys resolved [:job-queue :db :port]))
-              :halt       (fn [_ instance _]
-                            {:prev instance
-                             :now  :halted})}}}})
+    {:server {:job-queue (ds/ref [:common-services :job-queue])
+              :db        (ds/ref [:common-services :db])
+              :port      (ds/ref [:env :port])
+              :start     (fn [resolved _ _]
+                           (select-keys resolved [:job-queue :db :port]))
+              :stop      (fn [_ instance _]
+                           {:prev instance
+                            :now  :stoped})}}}})
 
 (def system
   {::ds/defs
@@ -45,6 +45,6 @@
 (def system
   {::ds/defs
    {:bootstrap {:logger prn}
-    :app       {:http-server {:init   (fn [{:keys [logger]} _ _]
-                                        (logger "starting"))
+    :app       {:http-server {:start   (fn [{:keys [logger]} _ _]
+                                         (logger "starting"))
                               :logger (ds/ref [:bootstrap :logger])}}}})

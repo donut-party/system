@@ -4,51 +4,51 @@
 
 
 (def system
-  {:defs {:env {:http-port {:handlers {:init 9090}}}
+  {:defs {:env {:http-port {:handlers {:start 9090}}}
           :app {:http-server {:deps     {:port (ds/ref [:env :http-port])}
-                              :handlers {:init-before
+                              :handlers {:start-before
                                          (fn [_ {:keys [port]} _]
                                            (println "starting server on port"
                                                     port))
 
-                                         :init
+                                         :start
                                          (fn [_ {:keys [port]} _]
                                            {:state :running
                                             :port  port})
 
-                                         :halt
+                                         :stop
                                          (fn [_ _ _] {})}}}}})
 
 ;; starting a server
-(ds/signal system :init)
+(ds/signal system :start)
 
 ;;---
 ;;; multiple server system
 ;;---
 (def http-server-component
   {:deps     {:port (ds/ref [:env :http-port])}
-   :handlers {:init
+   :handlers {:start
               (fn [_ {:keys [port]} _]
                 {:state :running
                  :port  (port)})
 
-              :init-after
+              :start-after
               (fn [{:keys [port]} _ _]
                 (prn "started http server on port "
                      port))
 
-              :init-around
+              :start-around
               (fn [_ _ {:keys [->info]}]
                 (->info {:time 1}))
 
-              :halt
+              :stop
               (fn [_ _ _]
                 {})}})
 
 (def multiple-server-system
-  {:defs {:env {:http-port {:handlers {:init (fn [& _]
-                                               (let [port-num (atom 9090)]
-                                                 #(swap! port-num inc)))}}}
+  {:defs {:env {:http-port {:handlers {:start (fn [& _]
+                                                (let [port-num (atom 9090)]
+                                                  #(swap! port-num inc)))}}}
           :app {:http-server-1 http-server-component
                 :http-server-2 http-server-component}}})
 
@@ -60,45 +60,45 @@
   {:http-server
    {:deps     {:port        (ds/ref [:env :http-port])
                :req-handler (ds/ref :req-handler)}
-    :handlers {:init
+    :handlers {:start
                (fn [_ {:keys [port req-handler]} _]
                  {:state       :running
                   :port        (port)
                   :req-handler req-handler})
 
-               :init-after
+               :start-after
                (fn [{:keys [port]} _ _]
                  (prn "started http server on port "
                       port))
 
-               :init-around
+               :start-around
                (fn [_ _ {:keys [->info]}]
                  (->info {:time 1}))
 
-               :halt
+               :stop
                (fn [_ _ _]
                  {})}}})
 
 (def relative-ref-system
-  {:defs {:env      {:http-port {:handlers {:init (fn [& _]
-                                                    (let [port-num (atom 9090)]
-                                                      #(swap! port-num inc)))}}}
+  {:defs {:env      {:http-port {:handlers {:start (fn [& _]
+                                                     (let [port-num (atom 9090)]
+                                                       #(swap! port-num inc)))}}}
           :server-1 (assoc-in server-component-group
-                     [:req-handler :handlers :init]
-                     (constantly (fn req-handler-1 [req] req)))
+                              [:req-handler :handlers :start]
+                              (constantly (fn req-handler-1 [req] req)))
           :server-2 (assoc-in server-component-group
-                     [:req-handler :handlers :init]
-                     (constantly (fn req-handler-2 [req] req)))}})
+                              [:req-handler :handlers :start]
+                              (constantly (fn req-handler-2 [req] req)))}})
 
 (def relative-ref-system
-  {:defs {:env      {:http-port {:handlers {:init (fn [& _]
-                                                    (let [port-num (atom 9090)]
-                                                      #(swap! port-num inc)))}}}
+  {:defs {:env      {:http-port {:handlers {:start (fn [& _]
+                                                     (let [port-num (atom 9090)]
+                                                       #(swap! port-num inc)))}}}
           :server-1 [server-component-group
-                     {:req-handler {:handlers {:init (constantly (fn req-handler-1 [req] req))}}}]
+                     {:req-handler {:handlers {:start (constantly (fn req-handler-1 [req] req))}}}]
 
           :server-2 [server-component-group
-                     {:req-handler {:handlers {:init (constantly (fn req-handler-2 [req] req))}}}]}})
+                     {:req-handler {:handlers {:start (constantly (fn req-handler-2 [req] req))}}}]}})
 
 
 ;;---
@@ -110,13 +110,13 @@
        {:app-name "foo.app"}
 
        :common-services
-       {:job-queue {:init "job queue"}
-        :db        {:init "db"}}
+       {:job-queue {:start "job queue"}
+        :db        {:start "db"}}
 
        :sub-systems
-       {:system-1 (ds/subsystem
+       {:system-1 (ds/subsystem-component
                    #::ds{:defs {:app {:job-queue (ds/ref [:common-services :job-queue])
                                       :db        (ds/ref [:common-services :db])}}})
-        :system-2 (ds/subsystem
+        :system-2 (ds/subsystem-component
                    #::ds{:defs {:app {:job-queue (ds/ref [:common-services :job-queue])
                                       :db        (ds/ref [:common-services :db])}}})}}}

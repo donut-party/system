@@ -8,11 +8,11 @@
             [loom.alg :as la]))
 
 (deftest apply-base-test
-  (is (= #::ds{:base {:app {:init-before [:foo]}}
-               :defs {:app {:http-server {:init-before [:foo]
-                                          :init-after  [:bar]}}}}
-         (#'ds/apply-base #::ds{:base {:app {:init-before [:foo]}}
-                                :defs {:app {:http-server {:init-after [:bar]}}}}))))
+  (is (= #::ds{:base {:app {:start-before [:foo]}}
+               :defs {:app {:http-server {:start-before [:foo]
+                                          :start-after  [:bar]}}}}
+         (#'ds/apply-base #::ds{:base {:app {:start-before [:foo]}}
+                                :defs {:app {:http-server {:start-after [:bar]}}}}))))
 
 (deftest merge-component-defs-test
   (is (= #::ds{:defs {:app {:http-server {:foo :bar
@@ -58,27 +58,27 @@
 
 (deftest simple-signal-test
   (is (= #::ds{:instances {:app {:boop "boop"}}}
-         (-> #::ds{:defs {:app {:boop {:init "boop"}}}}
-             (ds/signal :init)
+         (-> #::ds{:defs {:app {:boop {:start "boop"}}}}
+             (ds/signal :start)
              (select-keys [::ds/instances]))))
 
   (is (= #::ds{:instances {:app {:boop "boop and boop again"}}}
-         (-> #::ds{:defs {:app {:boop {:init "boop"
-                                       :halt (fn [_ instance _]
+         (-> #::ds{:defs {:app {:boop {:start "boop"
+                                       :stop (fn [_ instance _]
                                                (str instance " and boop again"))}}}}
-             (ds/signal :init)
-             (ds/signal :halt)
+             (ds/signal :start)
+             (ds/signal :stop)
              (select-keys [::ds/instances])))))
 
 (deftest ref-test
   (testing "referred port number is passed to referrer"
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
-           (-> #::ds{:defs {:env {:http-port {:init 9090}}
+           (-> #::ds{:defs {:env {:http-port {:start 9090}}
                             :app {:http-server {:port (ds/ref [:env :http-port])
-                                                :init (fn [{:keys [port]} _ _]
+                                                :start (fn [{:keys [port]} _ _]
                                                         port)}}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
 (deftest local-ref-test
@@ -86,10 +86,10 @@
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}}
            (-> #::ds{:defs {:app {:http-server {:port (ds/ref :http-port)
-                                                :init (fn [{:keys [port]} _ _]
+                                                :start (fn [{:keys [port]} _ _]
                                                         port)}
                                   :http-port   9090}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
 (deftest group-ref-test
@@ -98,12 +98,12 @@
                                    :timeout   5000}
                              :app {:http-server {:http-port 9090
                                                  :timeout   5000}}}}
-           (-> #::ds{:defs {:env {:http-port {:init 9090}
-                                  :timeout   {:init 5000}}
+           (-> #::ds{:defs {:env {:http-port {:start 9090}
+                                  :timeout   {:start 5000}}
                             :app {:http-server {:env  (ds/group-ref :env)
-                                                :init (fn [{:keys [env]} _ _]
+                                                :start (fn [{:keys [env]} _ _]
                                                         env)}}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
 
@@ -114,33 +114,33 @@
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port 9090}
                             :app {:http-server {:port (ds/ref [:env :http-port])
-                                                :init (fn [{:keys [port]} _ _]
+                                                :start (fn [{:keys [port]} _ _]
                                                         port)}}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
 (deftest component-merge-test
   (testing "components can be defined as a vector of maps, in which case they're all merged"
-    (let [handlers {:init (fn [{:keys [port]} _ _]
+    (let [handlers {:start (fn [{:keys [port]} _ _]
                             port)}]
       (is (= #::ds{:instances {:env {:http-port 9090}
                                :app {:http-server 9090}}}
-             (-> #::ds{:defs {:env {:http-port {:init 9090}}
+             (-> #::ds{:defs {:env {:http-port {:start 9090}}
                               :app {:http-server [{:port (ds/ref [:env :http-port])}
                                                   handlers]}}}
-                 (ds/signal :init)
+                 (ds/signal :start)
                  (select-keys [::ds/instances])))))))
 
 (deftest system-merge-test
-  (let [handlers {:init (fn [{:keys [port]} _ _]
+  (let [handlers {:start (fn [{:keys [port]} _ _]
                           port)}]
-    (is (= #::ds{:defs {:env {:http-port {:init 9090}}
+    (is (= #::ds{:defs {:env {:http-port {:start 9090}}
                         :app {:http-server (merge {:port (ds/ref [:env :http-port])}
                                                   handlers)}}}
            (-> (ds/system-merge
                 #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
                                                  handlers]}}}
-                #::ds{:defs {:env {:http-port {:init 9090}}}})
+                #::ds{:defs {:env {:http-port {:start 9090}}}})
                (select-keys [::ds/defs]))))))
 
 (deftest validate-component
@@ -154,50 +154,50 @@
                                                                                       :type    nil
                                                                                       :message nil})]}}}}}
            (-> #::ds{:base
-                     {:env {:init-after ds/validate-with-malli}}
+                     {:env {:start-after ds/validate-with-malli}}
 
                      :defs
                      {:env
-                      {:http-port {:init   "9090"
+                      {:http-port {:start   "9090"
                                    :schema schema}}
 
                       :app
                       {:http-server {:port (ds/ref [:env :http-port])
-                                     :init (fn [{:keys [port]} _ _]
+                                     :start (fn [{:keys [port]} _ _]
                                              port)}}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/out]))))))
 
 (deftest lifecycle-values-ignored-when-not-system
   (let [expected #::ds{:instances {:env {:http-port 9090}
                                    :app {:http-server 9090}}}
-        system   #::ds{:defs {:env {:http-port {:init 9090}}
+        system   #::ds{:defs {:env {:http-port {:start 9090}}
                               :app {:http-server {:port (ds/ref [:env :http-port])
-                                                  :init (fn [{:keys [port]} _ _]
+                                                  :start (fn [{:keys [port]} _ _]
                                                           port)}}}}]
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:init-before (constantly nil)}}}})
-                (ds/signal :init)
+                (ds/system-merge #::ds{:defs {:app {:http-server {:start-before (constantly nil)}}}})
+                (ds/signal :start)
                 (select-keys [::ds/instances]))))
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:init-after (constantly nil)}}}})
-                (ds/signal :init)
+                (ds/system-merge #::ds{:defs {:app {:http-server {:start-after (constantly nil)}}}})
+                (ds/signal :start)
                 (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
   (let [system (ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
                                            :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
-    (is (= (->> [[:env :http-port :init-before]
-                 [:env :http-port :init]
-                 [:env :http-port :init-after]
-                 [:app :http-server :init-before]
-                 [:app :http-server :init]
-                 [:app :http-server :init-after]]
+    (is (= (->> [[:env :http-port :start-before]
+                 [:env :http-port :start]
+                 [:env :http-port :start-after]
+                 [:app :http-server :start-before]
+                 [:app :http-server :start]
+                 [:app :http-server :start-after]]
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
-           (ds/gen-signal-computation-graph system :init :reverse-topsort)))))
+           (ds/gen-signal-computation-graph system :start :reverse-topsort)))))
 
 
 (deftest channel-fns-test
@@ -205,12 +205,12 @@
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}
                  :out       {:info {:app {:http-server "info"}}}}
-           (-> #::ds{:defs {:app {:http-server {:port (ds/ref :http-port)
-                                                :init (fn [{:keys [port]} _ {:keys [->instance ->info]}]
-                                                        (-> (->instance port)
-                                                            (->info "info")))}
+           (-> #::ds{:defs {:app {:http-server {:port  (ds/ref :http-port)
+                                                :start (fn [{:keys [port]} _ {:keys [->instance ->info]}]
+                                                         (-> (->instance port)
+                                                             (->info "info")))}
                                   :http-port   9090}}}
-               (ds/signal :init)
+               (ds/signal :start)
                (select-keys [::ds/instances ::ds/out]))))))
 
 (deftest subsystem-test
@@ -218,54 +218,54 @@
                         {:local {:port 9090}
 
                          :app
-                         {:server {:job-queue  (ds/ref [:common-services :job-queue])
-                                   :db         (ds/ref [:common-services :db])
-                                   :port       (ds/ref [:local :port])
-                                   :init       (fn [resolved _ _]
-                                                 (select-keys resolved [:job-queue :db :port]))
-                                   :init-after (fn [_ _ {:keys [->info]}]
-                                                 (->info "inited"))
-                                   :halt       (fn [_ instance _]
-                                                 {:prev instance
-                                                  :now  :halted})
-                                   :halt-after (fn [_ _ {:keys [->info]}]
-                                                 (->info "halted"))}}}}
+                         {:server {:job-queue   (ds/ref [:common-services :job-queue])
+                                   :db          (ds/ref [:common-services :db])
+                                   :port        (ds/ref [:local :port])
+                                   :start       (fn [resolved _ _]
+                                                  (select-keys resolved [:job-queue :db :port]))
+                                   :start-after (fn [_ _ {:keys [->info]}]
+                                                  (->info "started"))
+                                   :stop        (fn [_ instance _]
+                                                  {:prev instance
+                                                   :now  :stopped})
+                                   :stop-after  (fn [_ _ {:keys [->info]}]
+                                                  (->info "stopped"))}}}}
 
-        inited (-> #::ds{:defs
-                         {:env
-                          {:app-name "foo.app"}
+        started (-> #::ds{:defs
+                          {:env
+                           {:app-name "foo.app"}
 
-                          :common-services
-                          {:job-queue "job queue"
-                           :db        "db"}
+                           :common-services
+                           {:job-queue "job queue"
+                            :db        "db"}
 
-                          :sub-systems
-                          {:system-1 (ds/subsystem-component
-                                      subsystem
-                                      #{(ds/ref [:common-services :job-queue])
-                                        (ds/ref [:common-services :db])})
-                           :system-2 (ds/subsystem-component
-                                      subsystem
-                                      #{(ds/group-ref :common)})}}}
-                   (ds/signal :init))]
+                           :sub-systems
+                           {:system-1 (ds/subsystem-component
+                                       subsystem
+                                       #{(ds/ref [:common-services :job-queue])
+                                         (ds/ref [:common-services :db])})
+                            :system-2 (ds/subsystem-component
+                                       subsystem
+                                       #{(ds/group-ref :common)})}}}
+                    (ds/signal :start))]
 
     (is (= {:job-queue "job queue"
             :db        "db"
             :port      9090}
-           (get-in inited [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
-           (get-in inited [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
-    (is (= "inited"
-           (get-in inited [::ds/out :info :sub-systems :system-1 :app :server])
-           (get-in inited [::ds/out :info :sub-systems :system-2 :app :server])))
+           (get-in started [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
+           (get-in started [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
+    (is (= "started"
+           (get-in started [::ds/out :info :sub-systems :system-1 :app :server])
+           (get-in started [::ds/out :info :sub-systems :system-2 :app :server])))
 
-    (let [halted (ds/signal inited :halt)]
+    (let [stopped (ds/signal started :stop)]
       (is (= {:prev {:job-queue "job queue"
                      :db        "db"
                      :port      9090}
-              :now  :halted}
-             (get-in halted [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
-             (get-in halted [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
+              :now  :stopped}
+             (get-in stopped [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
+             (get-in stopped [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
 
-      (is (= "halted"
-             (get-in halted [::ds/out :info :sub-systems :system-1 :app :server])
-             (get-in halted [::ds/out :info :sub-systems :system-2 :app :server]))))))
+      (is (= "stopped"
+             (get-in stopped [::ds/out :info :sub-systems :system-1 :app :server])
+             (get-in stopped [::ds/out :info :sub-systems :system-2 :app :server]))))))
