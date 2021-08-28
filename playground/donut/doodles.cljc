@@ -37,3 +37,14 @@
      :system-2 (ds/subsystem-component
                 subsystem
                 #{(ds/group-ref :common-services)})}}})
+
+;;---
+;;; bootstrapping
+;;---
+
+(def system
+  {::ds/defs
+   {:bootstrap {:logger prn}
+    :app       {:http-server {:init   (fn [{:keys [logger]} _ _]
+                                        (logger "starting"))
+                              :logger (ds/ref [:bootstrap :logger])}}}})

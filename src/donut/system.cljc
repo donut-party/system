@@ -68,11 +68,14 @@
   "produces an updated component def where refs are replaced by the instance of
   the thing being ref'd. places result under ::resolved"
   [system component-id]
+  ;; allow custom resolution fns. right now this is specifically to accommodate
+  ;; subsystems.
   (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
 
 (def config-collect-group-path
+  "specter path that retains a component's group name"
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
 (defn- apply-base
@@ -236,7 +239,7 @@
 
 (defn signal-stage?
   [stage]
-  (not (re-find #"(-before$|-after$)" (str stage))))
+  (not (re-find #"(-before$|-after$)" (name stage))))
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
@@ -246,8 +249,10 @@
 
 (defn- stage-result-valid?
   [system]
-  (not (or (sp/select-one [::out :errors] system)
-           (sp/select-one [::out :validation] system))))
+  (-> system
+      ::out
+      (select-keys [:errors :validation])
+      empty?))
 
 (defn prune-signal-computation-graph
   [system computation-stage-node]
@@ -385,7 +390,7 @@
 (defn- mapify-imports
   [imports]
   (reduce (fn [refmap ref]
-            (assoc-in refmap (:key ref) ref))
+            (sp/setval [(:key ref)] ref refmap))
           {}
           imports))
 
