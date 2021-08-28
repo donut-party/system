@@ -246,8 +246,7 @@
                                         (ds/ref [:common-services :db])})
                            :system-2 (ds/subsystem-component
                                       subsystem
-                                      #{(ds/ref [:common-services :job-queue])
-                                        (ds/ref [:common-services :db])})}}}
+                                      #{(ds/group-ref [:common])})}}}
                    (ds/signal :init))]
 
     (is (= {:job-queue "job queue"
