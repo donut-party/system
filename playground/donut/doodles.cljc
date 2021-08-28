@@ -7,7 +7,6 @@
 ;;; subsystems
 ;;---
 
-
 (def subsystem
   {::ds/defs
    {:env {:port 9090}
@@ -34,9 +33,7 @@
     :sub-systems
     {:system-1 (ds/subsystem-component
                 subsystem
-                #{(ds/ref [:common-services :job-queue])
-                  (ds/ref [:common-services :db])
-                  (ds/group-ref [:common-services])})
+                #{(ds/group-ref :common-services)})
      :system-2 (ds/subsystem-component
                 subsystem
-                #{(ds/group-ref :common)})}}})
+                #{(ds/group-ref :common-services)})}}})

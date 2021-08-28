@@ -50,14 +50,23 @@
   (->> system
        (sp/setval [::resolved component-id]
                   (sp/select-one [::defs component-id] system))
-       (sp/transform [::resolved component-id (sp/walker (some-fn ref? group-ref?))]
+       (sp/transform [::resolved component-id (sp/walker (some-fn ref? group-ref? system?))]
                      (fn [{:keys [key] :as r}]
-                       (if (or (group-ref? r) (vector? key))
+                       (cond
+                         ;; don't descend into subsystems
+                         (system? r)
+                         r
+
+                         (or (group-ref? r) (vector? key))
                          (sp/select-one [::instances key] system)
+
+                         ;; local refs
+                         :else
                          (sp/select-one [::instances (first component-id) key] system))))))
 
 (defn- resolve-refs
-  "resolve component def to ::resolved path"
+  "produces an updated component def where refs are replaced by the instance of
+  the thing being ref'd. places result under ::resolved"
   [system component-id]
   (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
     (resolution-fn system component-id)
@@ -381,6 +390,8 @@
           imports))
 
 (defn- merge-imports
+  "Copies ref'd instances from parent-system into subsystem so that subsystem's
+  imported refs will resolve correctly"
   [{:keys [::imports] :as system-component} parent-system]
   (reduce (fn [system {:keys [key]}]
             (sp/setval [::subsystem ::instances key]
@@ -392,8 +403,6 @@
 (defn- subsystem-resolver
   [parent-system component-id]
   (->> (default-resolve-refs parent-system component-id)
-       (sp/setval [::resolved component-id ::subsystem]
-                  (sp/select-one [::defs component-id ::subsystem] parent-system))
        (sp/transform [::resolved component-id]
                      (fn [system]
                        (merge-imports system parent-system)))))
