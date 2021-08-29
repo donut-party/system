@@ -77,7 +77,7 @@
            (-> #::ds{:defs {:env {:http-port {:start 9090}}
                             :app {:http-server {:port (ds/ref [:env :http-port])
                                                 :start (fn [{:keys [port]} _ _]
-                                                        port)}}}}
+                                                         port)}}}}
                (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
@@ -269,3 +269,24 @@
       (is (= "stopped"
              (get-in stopped [::ds/out :info :sub-systems :system-1 :app :server])
              (get-in stopped [::ds/out :info :sub-systems :system-2 :app :server]))))))
+
+(deftest select-components-test
+  (testing "if you specify components, the union of their subgraphs is used"
+    (let [system-def #::ds{:defs {:env {:http-port {:start 9090}}
+                                  :app {:http-server {:port  (ds/ref [:env :http-port])
+                                                      :start (fn [{:keys [port]} _ _]
+                                                               port)
+                                                      :stop "stopped http-server"}
+                                        :db          {:start "db"
+                                                      :stop  "stopped db"}}}}
+          started (ds/signal system-def :start #{[:app :http-server]})]
+      (is (= #::ds{:instances {:app {:http-server 9090}
+                               :env {:http-port 9090}}}
+             (select-keys started [::ds/instances])))
+
+      (testing "the selected components are retained beyond the start"
+        (is (= #::ds{:instances {:app {:http-server "stopped http-server"}
+                                 :env {:http-port 9090}}}
+               (-> started
+                   (ds/signal :stop)
+                   (select-keys [::ds/instances]))))))))

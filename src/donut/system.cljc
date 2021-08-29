@@ -156,7 +156,7 @@
                     topsorted
                     (ld/nodes-filtered-by (reduce (fn [nodes component-id]
                                                     (->> component-id
-                                                         (ld/subgraph-reachable-from g)
+                                                         (ld/subgraph-reachable-from topsorted)
                                                          lg/nodes
                                                          (into nodes)))
                                                   #{}
@@ -167,7 +167,7 @@
                        (apply lg/add-edges
                               (reduce lg/add-nodes
                                       (lg/digraph)
-                                      (lg/nodes topsorted))))]
+                                      (lg/nodes selected))))]
     (-> system
         (assoc-in [::graphs :topsort] selected)
         (assoc-in [::graphs :reverse-topsort] reversed))))
