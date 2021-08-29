@@ -133,10 +133,10 @@
 
 (deftest system-merge-test
   (let [handlers {:start (fn [{:keys [port]} _ _]
-                          port)}]
+                           port)}]
     (is (= #::ds{:defs {:env {:http-port {:start 9090}}
-                        :app {:http-server (merge {:port (ds/ref [:env :http-port])}
-                                                  handlers)}}}
+                        :app {:http-server [{:port (ds/ref [:env :http-port])}
+                                            handlers]}}}
            (-> (ds/system-merge
                 #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
                                                  handlers]}}}
@@ -174,7 +174,7 @@
         system   #::ds{:defs {:env {:http-port {:start 9090}}
                               :app {:http-server {:port (ds/ref [:env :http-port])
                                                   :start (fn [{:keys [port]} _ _]
-                                                          port)}}}}]
+                                                           port)}}}}]
     (is (= expected
            (->  system
                 (ds/system-merge #::ds{:defs {:app {:http-server {:start-before (constantly nil)}}}})

@@ -33,6 +33,8 @@
    [::graph {:optional true} any?]
    [::instances {:optional true} any?]
    [::out {:optional true} [:map]]
+   [::component-order {:optional true} any?]
+   [::selected-component-ids {:optional true} any?]
    ])
 
 (def system? (m/validator DonutSystem))
@@ -147,13 +149,28 @@
           (ref-edges system direction)))
 
 (defn gen-graphs
-  [system]
-  (let [g (component-graph-nodes system)]
+  [{:keys [::selected-component-ids] :as system}]
+  (let [g         (component-graph-nodes system)
+        topsorted (component-graph-add-edges g system :topsort)
+        selected  (if (empty? selected-component-ids)
+                    topsorted
+                    (ld/nodes-filtered-by (reduce (fn [nodes component-id]
+                                                    (->> component-id
+                                                         (ld/subgraph-reachable-from g)
+                                                         lg/nodes
+                                                         (into nodes)))
+                                                  #{}
+                                                  selected-component-ids)
+                                          topsorted))
+        reversed  (->> (lg/edges selected)
+                       (map (fn [[a b]] [b a]))
+                       (apply lg/add-edges
+                              (reduce lg/add-nodes
+                                      (lg/digraph)
+                                      (lg/nodes topsorted))))]
     (-> system
-        (assoc-in [::graphs :topsort]
-                  (component-graph-add-edges g system :topsort))
-        (assoc-in [::graphs :reverse-topsort]
-                  (component-graph-add-edges g system :reverse-topsort)))))
+        (assoc-in [::graphs :topsort] selected)
+        (assoc-in [::graphs :reverse-topsort] reversed))))
 
 (def default-component-order
   "which graph to follow to apply signal"
@@ -351,22 +368,48 @@
                     component-def))
                 system))
 
+(defn- set-component-keys
+  [system signal-name component-keys]
+  (assoc system
+         ::selected-component-ids
+         (cond
+           ;; if not starting, scope component keys to started instances
+           (not= :start signal-name)
+           (sp/select [(assoc config-collect-group-path 0 ::instances)
+                       sp/MAP-KEYS]
+                      system)
+
+           (empty? component-keys)
+           (sp/select [config-collect-group-path sp/MAP-KEYS] system)
+
+           ;; starting and specified component keys; expand groups
+           :else
+           (reduce (fn [cks ck]
+                     (if (vector? ck)
+                       (conj cks ck)
+                       (into cks (->> system
+                                      (sp/select [::defs ck sp/MAP-KEYS])
+                                      (map vector (repeat ck))))))
+                   []
+                   component-keys))))
+
 (defn init-system
-  [maybe-system]
-  (->> (merge {::component-order default-component-order}
-              maybe-system)
-       merge-component-defs
-       apply-base
-       gen-graphs))
+  [maybe-system signal-name component-keys]
+  (-> (merge {::component-order default-component-order}
+             maybe-system)
+      merge-component-defs
+      apply-base
+      (set-component-keys signal-name component-keys)
+      gen-graphs))
 
 (defn- clean-after-signal-apply
   [system]
   (dissoc system :->error :->info :->instance :->warn :->validation))
 
 (defn signal
-  [system signal-name]
+  [system signal-name & [component-keys]]
   (-> system
-      init-system
+      (init-system signal-name component-keys)
       (init-signal-computation-graph signal-name)
       (apply-signal-computation-graph)
       (clean-after-signal-apply)))
@@ -374,7 +417,7 @@
 (defn system-merge
   [& systems]
   (reduce (fn [system subsystem]
-            (mm/meta-merge system (init-system subsystem)))
+            (mm/meta-merge system subsystem))
           {}
           systems))
 
