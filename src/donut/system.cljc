@@ -358,16 +358,6 @@
 ;;; init, apply, etc
 ;;---
 
-(defn- merge-component-defs
-  "Components defined as vectors of maps get merged into a single map"
-  [system]
-  (sp/transform [::defs sp/MAP-VALS sp/MAP-VALS]
-                (fn [component-def]
-                  (if (sequential? component-def)
-                    (apply merge component-def)
-                    component-def))
-                system))
-
 (defn- set-component-keys
   [system signal-name component-keys]
   (assoc system
@@ -397,7 +387,6 @@
   [maybe-system signal-name component-keys]
   (-> (merge {::component-order default-component-order}
              maybe-system)
-      merge-component-defs
       apply-base
       (set-component-keys signal-name component-keys)
       gen-graphs))

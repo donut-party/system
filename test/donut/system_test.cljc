@@ -14,13 +14,6 @@
          (#'ds/apply-base #::ds{:base {:app {:start-before [:foo]}}
                                 :defs {:app {:http-server {:start-after [:bar]}}}}))))
 
-(deftest merge-component-defs-test
-  (is (= #::ds{:defs {:app {:http-server {:foo :bar
-                                          :baz :bux}}}}
-         (#'ds/merge-component-defs
-          #::ds{:defs {:app {:http-server [{:foo :bar}
-                                           {:baz :bux}]}}}))))
-
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
                       :app {:http-server {:port (ds/ref [:env :http-port])}}}}
@@ -115,21 +108,9 @@
            (-> #::ds{:defs {:env {:http-port 9090}
                             :app {:http-server {:port (ds/ref [:env :http-port])
                                                 :start (fn [{:keys [port]} _ _]
-                                                        port)}}}}
+                                                         port)}}}}
                (ds/signal :start)
                (select-keys [::ds/instances]))))))
-
-(deftest component-merge-test
-  (testing "components can be defined as a vector of maps, in which case they're all merged"
-    (let [handlers {:start (fn [{:keys [port]} _ _]
-                            port)}]
-      (is (= #::ds{:instances {:env {:http-port 9090}
-                               :app {:http-server 9090}}}
-             (-> #::ds{:defs {:env {:http-port {:start 9090}}
-                              :app {:http-server [{:port (ds/ref [:env :http-port])}
-                                                  handlers]}}}
-                 (ds/signal :start)
-                 (select-keys [::ds/instances])))))))
 
 (deftest system-merge-test
   (let [handlers {:start (fn [{:keys [port]} _ _]
@@ -164,7 +145,7 @@
                       :app
                       {:http-server {:port (ds/ref [:env :http-port])
                                      :start (fn [{:keys [port]} _ _]
-                                             port)}}}}
+                                              port)}}}}
                (ds/signal :start)
                (select-keys [::ds/out]))))))
 
