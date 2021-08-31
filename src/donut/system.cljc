@@ -8,6 +8,10 @@
    [malli.core :as m]
    [meta-merge.core :as mm]))
 
+;;---
+;;; specs
+;;---
+
 (def ComponentLike
   "Component-like data shows up in `::defs`, `::resolved`, and `::instances`. None
   of these are the component per se, but they are the way the component
@@ -31,28 +35,36 @@
 (def ComponentGroups
   [:map-of ComponentGroupName ComponentGroup])
 
-(def InitializedDonutSystem
-  [:map])
-
 (def Graph
   [:map
    [:nodeset set?]
    [:adj map?]
    [:in map?]])
 
+(def Graphs
+  [:map
+   [:topsort Graph]
+   [:reverse-topsort Graph]])
+
+(def InitializedDonutSystem
+  [:map])
+
 (def DonutSystem
   [:map
    [::defs ComponentGroups]
    [::base {:optional true} [:map]]
    [::resolved {:optional true} ComponentGroups]
-   [::graph {:optional true} Graph]
+   [::graphs {:optional true} Graphs]
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
    [::component-order {:optional true} [:map-of keyword? keyword?]]
-   [::selected-component-ids {:optional true} [:set ComponentId]]
-   ])
+   [::selected-component-ids {:optional true} [:set ComponentId]]])
 
 (def system? (m/validator DonutSystem))
+
+;;---
+;;; types
+;;---
 
 (defrecord Ref [key])
 (defn ref? [x] (instance? Ref x))
@@ -61,6 +73,10 @@
 (defrecord GroupRef [key])
 (defn group-ref? [x] (instance? GroupRef x))
 (defn group-ref [x] (->GroupRef x))
+
+;;---
+;;; ref resolution
+;;---
 
 (defn- default-resolve-refs
   [system component-id]
@@ -91,6 +107,10 @@
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
 
+;;---
+;;; util/ helpers / misc
+;;---
+
 (def config-collect-group-path
   "specter path that retains a component's group name"
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
@@ -103,6 +123,18 @@
    (fn [group-name component-config]
      (mm/meta-merge (group-name base) component-config))
    system))
+
+(defn strk
+  "Like `str` but with keywords"
+  [& xs]
+  (->> xs
+       (reduce (fn [s x]
+                 (str s
+                      (if (keyword? x)
+                        (subs (str x) 1)
+                        x)))
+               "")
+       keyword))
 
 ;;---
 ;;; generate component graphs
@@ -196,17 +228,16 @@
 ;;; signal application
 ;;---
 
-(defn strk
-  "Like `str` but with keywords"
-  [& xs]
-  (->> xs
-       (reduce (fn [s x]
-                 (str s
-                      (if (keyword? x)
-                        (subs (str x) 1)
-                        x)))
-               "")
-       keyword))
+(defn- apply-signal-exception
+  [system computation-stage t]
+  (ex-info (str "Error on " computation-stage " when applying signal")
+           {:reason   ::apply-signal-exception
+            :stage    computation-stage
+            :resolved (sp/select-one [::resolved (take 2 computation-stage)]
+                                     system)
+            :instance (sp/select-one [::instances (take 2 computation-stage)]
+                                     system)}
+           t))
 
 (defn- handler-lifecycle-names
   [signal-name]
@@ -355,8 +386,12 @@
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
-        new-system     ((computation-stage-fn prepped-system computation-stage-node)
-                        prepped-system)]
+        new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
+                             prepped-system)
+                            (catch #?(:clj Throwable :cljs :default) t
+                              (throw (apply-signal-exception prepped-system
+                                                             computation-stage-node
+                                                             t))))]
     (if (stage-result-valid? new-system)
       (remove-signal-computation-stage-node new-system computation-stage-node)
       (prune-signal-computation-graph new-system computation-stage-node))))
