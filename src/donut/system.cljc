@@ -196,8 +196,8 @@
 (defn- handler-lifecycle-names
   [signal-name]
   {:apply-signal signal-name
-   :before       (strk signal-name :-before)
-   :after        (strk signal-name :-after)})
+   :before       (strk :before- signal-name)
+   :after        (strk :after- signal-name)})
 
 (defn- channel-fn
   [system channel component-id]
@@ -256,7 +256,7 @@
 
 (defn signal-stage?
   [stage]
-  (not (re-find #"(-before$|-after$)" (name stage))))
+  (not (re-find #"(^before-|^after-)" (name stage))))
 
 (defn- apply-stage-fn
   [system stage-fn component-id]

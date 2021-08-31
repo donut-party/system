@@ -8,11 +8,11 @@
             [loom.alg :as la]))
 
 (deftest apply-base-test
-  (is (= #::ds{:base {:app {:start-before [:foo]}}
-               :defs {:app {:http-server {:start-before [:foo]
-                                          :start-after  [:bar]}}}}
-         (#'ds/apply-base #::ds{:base {:app {:start-before [:foo]}}
-                                :defs {:app {:http-server {:start-after [:bar]}}}}))))
+  (is (= #::ds{:base {:app {:before-start [:foo]}}
+               :defs {:app {:http-server {:before-start [:foo]
+                                          :after-start  [:bar]}}}}
+         (#'ds/apply-base #::ds{:base {:app {:before-start [:foo]}}
+                                :defs {:app {:http-server {:after-start [:bar]}}}}))))
 
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
@@ -135,7 +135,7 @@
                                                                                       :type    nil
                                                                                       :message nil})]}}}}}
            (-> #::ds{:base
-                     {:env {:start-after ds/validate-with-malli}}
+                     {:env {:after-start ds/validate-with-malli}}
 
                      :defs
                      {:env
@@ -158,24 +158,24 @@
                                                            port)}}}}]
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:start-before (constantly nil)}}}})
+                (ds/system-merge #::ds{:defs {:app {:http-server {:before-start (constantly nil)}}}})
                 (ds/signal :start)
                 (select-keys [::ds/instances]))))
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:start-after (constantly nil)}}}})
+                (ds/system-merge #::ds{:defs {:app {:http-server {:after-start (constantly nil)}}}})
                 (ds/signal :start)
                 (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
   (let [system (ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
                                            :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
-    (is (= (->> [[:env :http-port :start-before]
+    (is (= (->> [[:env :http-port :before-start]
                  [:env :http-port :start]
-                 [:env :http-port :start-after]
-                 [:app :http-server :start-before]
+                 [:env :http-port :after-start]
+                 [:app :http-server :before-start]
                  [:app :http-server :start]
-                 [:app :http-server :start-after]]
+                 [:app :http-server :after-start]]
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
            (ds/gen-signal-computation-graph system :start :reverse-topsort)))))
@@ -204,12 +204,12 @@
                                    :port        (ds/ref [:local :port])
                                    :start       (fn [resolved _ _]
                                                   (select-keys resolved [:job-queue :db :port]))
-                                   :start-after (fn [_ _ {:keys [->info]}]
+                                   :after-start (fn [_ _ {:keys [->info]}]
                                                   (->info "started"))
                                    :stop        (fn [_ instance _]
                                                   {:prev instance
                                                    :now  :stopped})
-                                   :stop-after  (fn [_ _ {:keys [->info]}]
+                                   :after-stop  (fn [_ _ {:keys [->info]}]
                                                   (->info "stopped"))}}}}
 
         started (-> #::ds{:defs
