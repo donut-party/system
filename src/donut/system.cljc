@@ -9,6 +9,9 @@
    [meta-merge.core :as mm]))
 
 (def ComponentLike
+  "Component-like data shows up in `::defs`, `::resolved`, and `::instances`. None
+  of these are the component per se, but they are the way the component
+  manifests in that context."
   [:orn
    [:map map?]
    [:const any?]])
@@ -16,7 +19,7 @@
 (def ComponentName
   keyword?)
 
-(def ComponentLikes
+(def ComponentGroup
   [:map-of ComponentName ComponentLike])
 
 (def ComponentGroupName
@@ -25,8 +28,8 @@
 (def ComponentId
   [:tuple ComponentGroupName ComponentName])
 
-(def ComponentLikeGroups
-  [:map-of ComponentGroupName ComponentLikes])
+(def ComponentGroups
+  [:map-of ComponentGroupName ComponentGroup])
 
 (def InitializedDonutSystem
   [:map])
@@ -39,12 +42,12 @@
 
 (def DonutSystem
   [:map
-   [::defs ComponentLikeGroups]
+   [::defs ComponentGroups]
    [::base {:optional true} [:map]]
-   [::resolved {:optional true} ComponentLikeGroups]
+   [::resolved {:optional true} ComponentGroups]
    [::graph {:optional true} Graph]
-   [::instances {:optional true} ComponentLikeGroups]
-   [::out {:optional true} ComponentLikeGroups]
+   [::instances {:optional true} ComponentGroups]
+   [::out {:optional true} ComponentGroups]
    [::component-order {:optional true} [:map-of keyword? keyword?]]
    [::selected-component-ids {:optional true} [:set ComponentId]]
    ])
