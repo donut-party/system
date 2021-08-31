@@ -6,6 +6,7 @@
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
+   [malli.error :as me]
    [meta-merge.core :as mm]))
 
 ;;---
@@ -24,7 +25,10 @@
   keyword?)
 
 (def ComponentGroup
-  [:map-of ComponentName ComponentLike])
+  [:map-of
+   {:error/message "should be a map with keyword keys"}
+   ComponentName
+   ComponentLike])
 
 (def ComponentGroupName
   keyword?)
@@ -448,6 +452,9 @@
 
 (defn signal
   [system signal-name & [component-keys]]
+  (when-let [explanation (m/explain DonutSystem system)]
+    (throw (ex-info "Invalid system"
+                    (me/humanize explanation))))
   (-> system
       (init-system signal-name component-keys)
       (init-signal-computation-graph signal-name)
