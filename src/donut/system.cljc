@@ -8,33 +8,45 @@
    [malli.core :as m]
    [meta-merge.core :as mm]))
 
-;; TODO specs for:
-;; - component id (group name, component name)
+(def ComponentLike
+  [:orn
+   [:map map?]
+   [:const any?]])
 
-(def ComponentDefinition
+(def ComponentName
+  keyword?)
+
+(def ComponentLikes
+  [:map-of ComponentName ComponentLike])
+
+(def ComponentGroupName
+  keyword?)
+
+(def ComponentId
+  [:tuple ComponentGroupName ComponentName])
+
+(def ComponentLikeGroups
+  [:map-of ComponentGroupName ComponentLikes])
+
+(def InitializedDonutSystem
   [:map])
 
-(def ComponentName any?)
-
-(def ComponentDefinitions
-  [:map-of ComponentName ComponentDefinition])
-
-(def ComponentDefGroupName
-  any?)
-
-(def ComponentDefGroups
-  [:map-of ComponentDefGroupName ComponentDefinitions])
+(def Graph
+  [:map
+   [:nodeset set?]
+   [:adj map?]
+   [:in map?]])
 
 (def DonutSystem
   [:map
-   [::defs any?]
+   [::defs ComponentLikeGroups]
    [::base {:optional true} [:map]]
-   [::resolved {:optional true} [:map]]
-   [::graph {:optional true} any?]
-   [::instances {:optional true} any?]
-   [::out {:optional true} [:map]]
-   [::component-order {:optional true} any?]
-   [::selected-component-ids {:optional true} any?]
+   [::resolved {:optional true} ComponentLikeGroups]
+   [::graph {:optional true} Graph]
+   [::instances {:optional true} ComponentLikeGroups]
+   [::out {:optional true} ComponentLikeGroups]
+   [::component-order {:optional true} [:map-of keyword? keyword?]]
+   [::selected-component-ids {:optional true} [:set ComponentId]]
    ])
 
 (def system? (m/validator DonutSystem))
@@ -362,26 +374,27 @@
   [system signal-name component-keys]
   (assoc system
          ::selected-component-ids
-         (cond
-           ;; if not starting, scope component keys to started instances
-           (not= :start signal-name)
-           (sp/select [(assoc config-collect-group-path 0 ::instances)
-                       sp/MAP-KEYS]
-                      system)
+         (set
+          (cond
+            ;; if not starting, scope component keys to started instances
+            (not= :start signal-name)
+            (sp/select [(assoc config-collect-group-path 0 ::instances)
+                        sp/MAP-KEYS]
+                       system)
 
-           (empty? component-keys)
-           (sp/select [config-collect-group-path sp/MAP-KEYS] system)
+            (empty? component-keys)
+            (sp/select [config-collect-group-path sp/MAP-KEYS] system)
 
-           ;; starting and specified component keys; expand groups
-           :else
-           (reduce (fn [cks ck]
-                     (if (vector? ck)
-                       (conj cks ck)
-                       (into cks (->> system
-                                      (sp/select [::defs ck sp/MAP-KEYS])
-                                      (map vector (repeat ck))))))
-                   []
-                   component-keys))))
+            ;; starting and specified component keys; expand groups
+            :else
+            (reduce (fn [cks ck]
+                      (if (vector? ck)
+                        (conj cks ck)
+                        (into cks (->> system
+                                       (sp/select [::defs ck sp/MAP-KEYS])
+                                       (map vector (repeat ck))))))
+                    #{}
+                    component-keys)))))
 
 (defn init-system
   [maybe-system signal-name component-keys]
