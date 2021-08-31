@@ -82,6 +82,34 @@
 ;;; ref resolution
 ;;---
 
+(defn ref-exception
+  [system referencing-component-id referenced-component-id]
+  (ex-info (format "The component %s referenced by %s isn't defined"
+                   referenced-component-id
+                   referencing-component-id)
+           {:referencing-component-id referencing-component-id
+            :referenced-component-id  referenced-component-id}))
+
+(defn- resolve-ref
+  [system referencing-component-id [component-group component-name :as referenced-component-id]]
+  (when-not (contains? (sp/select-one [::instances component-group] system) component-name)
+    (throw (ref-exception system referencing-component-id referenced-component-id)))
+  (sp/select-one [::instances referenced-component-id] system))
+
+(defn group-ref-exception
+  [system referencing-component-id referenced-component-group-name]
+  (ex-info (format "The component group %s referenced by %s has no components"
+                   referenced-component-group-name
+                   referencing-component-id)
+           {:referencing-component-id        referencing-component-id
+            :referenced-component-group-name referenced-component-group-name}))
+
+(defn- resolve-group-ref
+  [system referencing-component-id {:keys [key]}]
+  (when-not (contains? (::instances system) key)
+    (throw (group-ref-exception system referencing-component-id key)))
+  (sp/select-one [::instances key] system))
+
 (defn- default-resolve-refs
   [system component-id]
   (->> system
@@ -94,12 +122,15 @@
                          (system? r)
                          r
 
-                         (or (group-ref? r) (vector? key))
-                         (sp/select-one [::instances key] system)
+                         (group-ref? r)
+                         (resolve-group-ref system component-id r)
+
+                         (vector? key)
+                         (resolve-ref system component-id key)
 
                          ;; local refs
                          :else
-                         (sp/select-one [::instances (first component-id) key] system))))))
+                         (resolve-ref system component-id [(first component-id) key]))))))
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
@@ -454,7 +485,8 @@
   [system signal-name & [component-keys]]
   (when-let [explanation (m/explain DonutSystem system)]
     (throw (ex-info "Invalid system"
-                    (me/humanize explanation))))
+                    {:reason                :spec-validation-error
+                     :spec-validation-error (me/humanize explanation)})))
   (-> system
       (init-system signal-name component-keys)
       (init-signal-computation-graph signal-name)
