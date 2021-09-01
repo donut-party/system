@@ -291,3 +291,17 @@
        ExceptionInfo
        (ds/signal {::ds/defs {:group {:component {:start (fn [])}}}}
                   :start))))
+
+(deftest signal-helper-test
+  (is (= {::ds/instances {:app {:boop "boop"}}}
+         (-> {::ds/defs {:app {:boop {:start "boop"}}}}
+             (ds/start)
+             (select-keys [::ds/instances]))))
+
+  (is (= {::ds/instances {:app {:boop "boop and boop again"}}}
+         (-> {::ds/defs {:app {:boop {:start "boop"
+                                      :stop (fn [_ instance _]
+                                              (str instance " and boop again"))}}}}
+             (ds/start)
+             (ds/stop)
+             (select-keys [::ds/instances])))))

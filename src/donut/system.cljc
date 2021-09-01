@@ -616,10 +616,10 @@
 
 (defn- system-config
   ([sconf]
-   (config sconf))
+   (cond (system? sconf)  sconf
+         (keyword? sconf) (config sconf)))
   ([sconf custom-config]
-   (let [cfg (cond (system? sconf)  sconf
-                   (keyword? sconf) (config sconf))]
+   (let [cfg (system-config sconf)]
      (cond (map? custom-config) (mm/meta-merge cfg custom-config)
            (fn? custom-config)  (custom-config cfg)))))
 
