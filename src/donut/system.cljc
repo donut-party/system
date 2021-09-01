@@ -1,6 +1,7 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require [com.rpl.specter :as sp]
+            #?(:cljs [goog.string :as gstring])
             [loom.alg :as la]
             [loom.derived :as ld]
             [loom.graph :as lg]
@@ -66,6 +67,8 @@
 
 (def system? (m/validator DonutSystem))
 
+(def Signal [:enum :start :stop :suspend :resume])
+
 ;;---
 ;;; types
 ;;---
@@ -79,14 +82,48 @@
 (defn group-ref [x] (->GroupRef x))
 
 ;;---
+;;; util/ helpers / misc
+;;---
+
+(def config-collect-group-path
+  "specter path that retains a component's group name"
+  [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
+
+(defn- apply-base
+  "merge common component configs"
+  [{:keys [::base] :as system}]
+  (sp/transform
+   [config-collect-group-path sp/MAP-VALS]
+   (fn [group-name component-config]
+     (mm/meta-merge (group-name base) component-config))
+   system))
+
+(defn strk
+  "Like `str` but with keywords"
+  [& xs]
+  (->> xs
+       (reduce (fn [s x]
+                 (str s
+                      (if (keyword? x)
+                        (subs (str x) 1)
+                        x)))
+               "")
+       keyword))
+
+(defn fmt
+  [& args]
+  (apply #?(:clj format :cljs gstring/format)
+         args))
+
+;;---
 ;;; ref resolution
 ;;---
 
 (defn ref-exception
   [system referencing-component-id referenced-component-id]
-  (ex-info (format "Invalid ref: '%s' references undefined component '%s'"
-                   referencing-component-id
-                   referenced-component-id)
+  (ex-info (fmt "Invalid ref: '%s' references undefined component '%s'"
+                referencing-component-id
+                referenced-component-id)
            {:referencing-component-id referencing-component-id
             :referenced-component-id  referenced-component-id}))
 
@@ -98,9 +135,9 @@
 
 (defn group-ref-exception
   [system referencing-component-id referenced-component-group-name]
-  (ex-info (format "Invalid group ref: '%s' references empty component group '%s'"
-                   referencing-component-id
-                   referenced-component-group-name)
+  (ex-info (fmt "Invalid group ref: '%s' references empty component group '%s'"
+                referencing-component-id
+                referenced-component-group-name)
            {:referencing-component-id        referencing-component-id
             :referenced-component-group-name referenced-component-group-name}))
 
@@ -141,35 +178,6 @@
   (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
-
-;;---
-;;; util/ helpers / misc
-;;---
-
-(def config-collect-group-path
-  "specter path that retains a component's group name"
-  [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
-
-(defn- apply-base
-  "merge common component configs"
-  [{:keys [::base] :as system}]
-  (sp/transform
-   [config-collect-group-path sp/MAP-VALS]
-   (fn [group-name component-config]
-     (mm/meta-merge (group-name base) component-config))
-   system))
-
-(defn strk
-  "Like `str` but with keywords"
-  [& xs]
-  (->> xs
-       (reduce (fn [s x]
-                 (str s
-                      (if (keyword? x)
-                        (subs (str x) 1)
-                        x)))
-               "")
-       keyword))
 
 ;;---
 ;;; generate component graphs
@@ -500,8 +508,12 @@
   [system signal-name & [component-keys]]
   (when-let [explanation (m/explain DonutSystem system)]
     (throw (ex-info "Invalid system"
-                    {:reason                :spec-validation-error
-                     :spec-validation-error (me/humanize explanation)})))
+                    {:reason             :system-spec-validation-error
+                     :spec-explain-human (me/humanize explanation)})))
+  (when-let [explanation (m/explain Signal signal-name)]
+    (throw (ex-info (str "Signal " signal-name " not recognized")
+                    {:reason             :signal-not-recognized
+                     :spec-explain-human (me/humanize explanation)})))
   (-> system
       (init-system signal-name component-keys)
       (init-signal-computation-graph signal-name)
