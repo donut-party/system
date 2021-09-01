@@ -22,36 +22,42 @@
    [:map map?]
    [:const any?]])
 
-(def ComponentName
-  keyword?)
+(def ComponentName keyword?)
 
 (def ComponentGroup
+  "Components are grouped. This theoretically helps if publishing a component
+  library. It also helps when creating multiple instances of the same collection
+  of components because components are allowed to have local refs. See TODO for
+  more details."
   [:map-of
    {:error/message "should be a map with keyword keys"}
    ComponentName
    ComponentLike])
 
-(def ComponentGroupName
-  keyword?)
-
-(def ComponentId
-  [:tuple ComponentGroupName ComponentName])
-
-(def ComponentGroups
-  [:map-of ComponentGroupName ComponentGroup])
+(def ComponentGroupName keyword?)
+(def ComponentId [:tuple ComponentGroupName ComponentName])
+(def ComponentGroups [:map-of ComponentGroupName ComponentGroup])
 
 (def Graph
+  "Graphs are used to specify component dependency order and signal application
+  order."
   [:map
    [:nodeset set?]
    [:adj map?]
    [:in map?]])
 
-(def Graphs
+(def OrderGraphs
+  "Topsorted and reverse-topsorted graphs are generated once when a system is
+  initialized and assoc'c into the system. These graphs are used when applying
+  signals."
   [:map
    [:topsort Graph]
    [:reverse-topsort Graph]])
 
 (def SignalConfig
+  "The set of signals your system can respond to is configurable. To apply a
+  signal, the system needs to know in what order components should be
+  traversed."
   [:map
    [:order [:enum :topsort :reverse-topsort]]])
 
@@ -60,7 +66,7 @@
    [::defs ComponentGroups]
    [::base {:optional true} [:map]]
    [::resolved {:optional true} ComponentGroups]
-   [::graphs {:optional true} Graphs]
+   [::graphs {:optional true} OrderGraphs]
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
@@ -72,10 +78,14 @@
 ;;; types
 ;;---
 
+;; When ComponentA has a ref to ComponentB, ComponentA is passed the instance of
+;; ComponentB when a signal is applied
 (defrecord Ref [key])
 (defn ref? [x] (instance? Ref x))
 (defn ref [k] (->Ref k))
 
+;; When ComponentA has a group ref to ComponentB, ComponentA is passed the
+;; map of all instances under `key` when a signal is applied
 (defrecord GroupRef [key])
 (defn group-ref? [x] (instance? GroupRef x))
 (defn group-ref [x] (->GroupRef x))
@@ -101,6 +111,7 @@
        keyword))
 
 (defn fmt
+  "just let me format a string in peace"
   [& args]
   (apply #?(:clj format :cljs gstring/format)
          args))
@@ -113,23 +124,17 @@
 (defn merge-def
   "merges defs, coercing constants to maps"
   [d1 d2]
-  (let [t1 (first (m/parse ComponentLike d1))
-        t2 (first (m/parse ComponentLike d2))]
-    (if (= t2 :const)
-      d2
-      (case t1
-        :map
-        (mm/meta-merge d1 d2)
-
-        :const
-        (mm/meta-merge {::constant d1} d2)))))
+  (let [d1 (if (map? d1) d1 {::constant d1})
+        d2 (if (map? d2) d2 {::constant d2})]
+    (mm/meta-merge d1 d2)))
 
 (defn- merge-base
+  "::base gives you a way to apply default config options to all components"
   [{:keys [::base] :as system}]
   (if base
     (sp/transform [(sp/walker ::defs) ::defs sp/MAP-VALS sp/MAP-VALS]
                   (fn [component-def]
-                    (merge-def component-def base))
+                    (merge-def base component-def))
                   system)
     system))
 

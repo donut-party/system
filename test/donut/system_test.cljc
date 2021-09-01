@@ -9,7 +9,7 @@
   (:import [clojure.lang ExceptionInfo]))
 
 (deftest merge-def-test
-  (is (= :foo
+  (is (= {::ds/constant :foo}
          (ds/merge-def {} :foo)))
 
   (testing "coercion to map with ::ds/constant key"
@@ -24,7 +24,8 @@
                                 :defs {:app {:http-server {:after-start [:bar]}}}})))
 
   (is (= #::ds{:base :foo
-               :defs {:app {:http-server :foo}}}
+               :defs {:app {:http-server {:after-start  [:bar]
+                                          ::ds/constant :foo}}}}
          (#'ds/merge-base #::ds{:base :foo
                                 :defs {:app {:http-server {:after-start [:bar]}}}}))))
 
