@@ -429,6 +429,9 @@
                                     (map? maybe-signal-constant)
                                     (or (sp/select-one [::resolved computation-stage-node] system)
                                         (sp/select-one [::resolved component-id ::constant] system)
+                                        (if-let [generic-handler (sp/select-one [::resolved component-id ::mk-signal-handler]
+                                                                                system)]
+                                          (generic-handler (last computation-stage-node)))
                                         system-identity)
 
                                     :else
@@ -617,13 +620,11 @@
 (defn subsystem-component
   [subsystem & [imports]]
   {:start   (forward-start :start)
-   :stop    (forward-update :stop)
-   :suspend (forward-update :suspend)
-   :resume  (forward-update :resume)
 
-   ::subsystem    subsystem
-   ::imports      (mapify-imports imports)
-   ::resolve-refs subsystem-resolver})
+   ::mk-signal-handler forward-update
+   ::subsystem         subsystem
+   ::imports           (mapify-imports imports)
+   ::resolve-refs      subsystem-resolver})
 
 ;;---
 ;;; sugar; system config helper, lift signals to fns
