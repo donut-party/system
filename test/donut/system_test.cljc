@@ -317,3 +317,15 @@
              (ds/start)
              (ds/stop)
              (select-keys [::ds/instances])))))
+
+(deftest recognized-signals-exception-test
+  (is (thrown-with-msg?
+       ExceptionInfo
+       #"Signal :foo not recognized"
+       (ds/signal {::ds/defs {:group {:component "constant"}}}
+                  :foo)))
+
+  (testing "should not throw exception"
+    (is (ds/signal {::ds/defs {:group {:component "constant"}}
+                    ::ds/signals (merge ds/default-signals {:foo {:order :topsort}})}
+                   :foo))))

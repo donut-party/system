@@ -51,8 +51,9 @@
    [:topsort Graph]
    [:reverse-topsort Graph]])
 
-(def InitializedDonutSystem
-  [:map])
+(def SignalConfig
+  [:map
+   [:order [:enum :topsort :reverse-topsort]]])
 
 (def DonutSystem
   [:map
@@ -62,12 +63,10 @@
    [::graphs {:optional true} Graphs]
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
-   [::component-order {:optional true} [:map-of keyword? keyword?]]
+   [::signals {:optional true} [:map-of keyword? SignalConfig]]
    [::selected-component-ids {:optional true} [:set ComponentId]]])
 
 (def system? (m/validator DonutSystem))
-
-(def Signal [:enum :start :stop :suspend :resume])
 
 ;;---
 ;;; types
@@ -281,10 +280,12 @@
         (assoc-in [::graphs :topsort] selected)
         (assoc-in [::graphs :reverse-topsort] reversed))))
 
-(def default-component-order
+(def default-signals
   "which graph to follow to apply signal"
-  {:start  :reverse-topsort
-   :resume :reverse-topsort})
+  {:start   {:order :reverse-topsort}
+   :stop    {:order :topsort}
+   :suspend {:order :topsort}
+   :resume  {:order :reverse-topsort}})
 
 ;;---
 ;;; signal application
@@ -370,8 +371,7 @@
          (gen-signal-computation-graph system
                                        signal
                                        (get-in system
-                                               [::component-order signal]
-                                               :topsort))))
+                                               [::signals signal :order]))))
 
 (defn signal-stage?
   [stage]
@@ -517,7 +517,7 @@
 
 (defn init-system
   [maybe-system signal-name component-keys]
-  (-> (merge {::component-order default-component-order}
+  (-> (merge {::signals default-signals}
              maybe-system)
       merge-base
       (set-component-keys signal-name component-keys)
@@ -533,15 +533,17 @@
     (throw (ex-info "Invalid system"
                     {:reason             :system-spec-validation-error
                      :spec-explain-human (me/humanize explanation)})))
-  (when-let [explanation (m/explain Signal signal-name)]
-    (throw (ex-info (str "Signal " signal-name " not recognized")
-                    {:reason             :signal-not-recognized
-                     :spec-explain-human (me/humanize explanation)})))
-  (-> system
-      (init-system signal-name component-keys)
-      (init-signal-computation-graph signal-name)
-      (apply-signal-computation-graph)
-      (clean-after-signal-apply)))
+
+  (let [inited-system (init-system system signal-name component-keys)]
+    (when-let [explanation (m/explain (into [:enum] (sp/select [::signals sp/MAP-KEYS] inited-system))
+                                      signal-name)]
+      (throw (ex-info (str "Signal " signal-name " not recognized")
+                      {:reason             :signal-not-recognized
+                       :spec-explain-human (me/humanize explanation)})))
+    (-> inited-system
+        (init-signal-computation-graph signal-name)
+        (apply-signal-computation-graph)
+        (clean-after-signal-apply))))
 
 (defn system-merge
   [& systems]
