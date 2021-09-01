@@ -5,7 +5,8 @@
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [malli.core :as m]
             [malli.impl.util :as miu]
-            [loom.alg :as la]))
+            [loom.alg :as la])
+  (:import [clojure.lang ExceptionInfo]))
 
 (deftest apply-base-test
   (is (= #::ds{:base {:app {:before-start [:foo]}}
@@ -253,21 +254,34 @@
 
 (deftest select-components-test
   (testing "if you specify components, the union of their subgraphs is used"
-    (let [system-def #::ds{:defs {:env {:http-port {:start 9090}}
-                                  :app {:http-server {:port  (ds/ref [:env :http-port])
-                                                      :start (fn [{:keys [port]} _ _]
-                                                               port)
-                                                      :stop "stopped http-server"}
-                                        :db          {:start "db"
-                                                      :stop  "stopped db"}}}}
-          started (ds/signal system-def :start #{[:app :http-server]})]
-      (is (= #::ds{:instances {:app {:http-server 9090}
-                               :env {:http-port 9090}}}
+    (let [system-def {::ds/defs {:env {:http-port {:start 9090}}
+                                 :app {:http-server {:port  (ds/ref [:env :http-port])
+                                                     :start (fn [{:keys [port]} _ _]
+                                                              port)
+                                                     :stop  "stopped http-server"}
+                                       :db          {:start "db"
+                                                     :stop  "stopped db"}}}}
+          started    (ds/signal system-def :start #{[:app :http-server]})]
+      (is (= {::ds/instances {:app {:http-server 9090}
+                              :env {:http-port 9090}}}
              (select-keys started [::ds/instances])))
 
       (testing "the selected components are retained beyond the start"
-        (is (= #::ds{:instances {:app {:http-server "stopped http-server"}
-                                 :env {:http-port 9090}}}
+        (is (= {::ds/instances {:app {:http-server "stopped http-server"}
+                                :env {:http-port 9090}}}
                (-> started
                    (ds/signal :stop)
                    (select-keys [::ds/instances]))))))))
+
+(deftest ref-undefined-test
+  (is (thrown-with-msg?
+       ExceptionInfo
+       #"Invalid ref"
+       (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent :ref])}}}}
+                  :start)))
+
+  (is (thrown-with-msg?
+       ExceptionInfo
+       #"Invalid group ref"
+       (ds/signal {::ds/defs {:group {:component {:ref (ds/group-ref :nonexistent)}}}}
+                  :start))))

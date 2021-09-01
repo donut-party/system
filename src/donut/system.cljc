@@ -84,9 +84,9 @@
 
 (defn ref-exception
   [system referencing-component-id referenced-component-id]
-  (ex-info (format "The component %s referenced by %s isn't defined"
-                   referenced-component-id
-                   referencing-component-id)
+  (ex-info (format "Invalid ref: '%s' references undefined component '%s'"
+                   referencing-component-id
+                   referenced-component-id)
            {:referencing-component-id referencing-component-id
             :referenced-component-id  referenced-component-id}))
 
@@ -98,9 +98,9 @@
 
 (defn group-ref-exception
   [system referencing-component-id referenced-component-group-name]
-  (ex-info (format "The component group %s referenced by %s has no components"
-                   referenced-component-group-name
-                   referencing-component-id)
+  (ex-info (format "Invalid group ref: '%s' references empty component group '%s'"
+                   referencing-component-id
+                   referenced-component-group-name)
            {:referencing-component-id        referencing-component-id
             :referenced-component-group-name referenced-component-group-name}))
 
