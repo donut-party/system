@@ -89,15 +89,6 @@
   "specter path that retains a component's group name"
   [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
-(defn- apply-base
-  "merge common component configs"
-  [{:keys [::base] :as system}]
-  (sp/transform
-   [config-collect-group-path sp/MAP-VALS]
-   (fn [group-name component-config]
-     (mm/meta-merge (group-name base) component-config))
-   system))
-
 (defn strk
   "Like `str` but with keywords"
   [& xs]
@@ -114,6 +105,34 @@
   [& args]
   (apply #?(:clj format :cljs gstring/format)
          args))
+
+
+;;---
+;;; merge component defs
+;;---
+
+(defn merge-def
+  "merges defs, coercing constants to maps"
+  [d1 d2]
+  (let [t1 (first (m/parse ComponentLike d1))
+        t2 (first (m/parse ComponentLike d2))]
+    (if (= t2 :const)
+      d2
+      (case t1
+        :map
+        (mm/meta-merge d1 d2)
+
+        :const
+        (mm/meta-merge {::constant d1} d2)))))
+
+(defn- merge-base
+  [{:keys [::base] :as system}]
+  (if base
+    (sp/transform [(sp/walker ::defs) ::defs sp/MAP-VALS sp/MAP-VALS]
+                  (fn [component-def]
+                    (merge-def component-def base))
+                  system)
+    system))
 
 ;;---
 ;;; ref resolution
@@ -409,6 +428,7 @@
 
                                     (map? maybe-signal-constant)
                                     (or (sp/select-one [::resolved computation-stage-node] system)
+                                        (sp/select-one [::resolved component-id ::constant] system)
                                         system-identity)
 
                                     :else
@@ -496,7 +516,7 @@
   [maybe-system signal-name component-keys]
   (-> (merge {::component-order default-component-order}
              maybe-system)
-      apply-base
+      merge-base
       (set-component-keys signal-name component-keys)
       gen-graphs))
 

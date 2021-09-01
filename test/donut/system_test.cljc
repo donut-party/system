@@ -8,11 +8,24 @@
             [loom.alg :as la])
   (:import [clojure.lang ExceptionInfo]))
 
-(deftest apply-base-test
-  (is (= #::ds{:base {:app {:before-start [:foo]}}
+(deftest merge-def-test
+  (is (= :foo
+         (ds/merge-def {} :foo)))
+
+  (testing "coercion to map with ::ds/constant key"
+    (is (= {::ds/constant :foo}
+           (ds/merge-def :foo {})))))
+
+(deftest merge-base-test
+  (is (= #::ds{:base {:before-start [:foo]}
                :defs {:app {:http-server {:before-start [:foo]
                                           :after-start  [:bar]}}}}
-         (#'ds/apply-base #::ds{:base {:app {:before-start [:foo]}}
+         (#'ds/merge-base #::ds{:base {:before-start [:foo]}
+                                :defs {:app {:http-server {:after-start [:bar]}}}})))
+
+  (is (= #::ds{:base :foo
+               :defs {:app {:http-server :foo}}}
+         (#'ds/merge-base #::ds{:base :foo
                                 :defs {:app {:http-server {:after-start [:bar]}}}}))))
 
 (deftest expand-refs-for-graph-test
@@ -135,8 +148,7 @@
                                                                                       :value   "9090"
                                                                                       :type    nil
                                                                                       :message nil})]}}}}}
-           (-> #::ds{:base
-                     {:env {:after-start ds/validate-with-malli}}
+           (-> #::ds{:base {:after-start ds/validate-with-malli}
 
                      :defs
                      {:env
