@@ -604,3 +604,33 @@
    ::subsystem    subsystem
    ::imports      (mapify-imports imports)
    ::resolve-refs subsystem-resolver})
+
+;;---
+;;; sugar; system config helper, lift signals to fns
+;;---
+
+(defmulti config
+  "A way to name different configs, e.g. :test, :dev, :prod, etc. Used by the rest
+  of the donut ecosystem."
+  identity)
+
+(defn- system-config
+  ([sconf]
+   (config sconf))
+  ([sconf custom-config]
+   (let [cfg (cond (system? sconf)  sconf
+                   (keyword? sconf) (config sconf))]
+     (cond (map? custom-config) (mm/meta-merge cfg custom-config)
+           (fn? custom-config)  (custom-config cfg)))))
+
+(defn start
+  ([config-name]
+   (signal (system-config config-name) :start))
+  ([config-name custom-config]
+   (signal (system-config config-name custom-config) :start))
+  ([config-name custom-config component-ids]
+   (signal (system-config config-name custom-config) :start component-ids)))
+
+(defn stop [system] (signal system :stop))
+(defn suspend [system] (signal system :suspend))
+(defn resume [system] (signal system :resume))
