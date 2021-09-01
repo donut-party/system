@@ -1,13 +1,13 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
-  (:require
-   [com.rpl.specter :as sp]
-   [loom.alg :as la]
-   [loom.derived :as ld]
-   [loom.graph :as lg]
-   [malli.core :as m]
-   [malli.error :as me]
-   [meta-merge.core :as mm]))
+  (:require [com.rpl.specter :as sp]
+            [loom.alg :as la]
+            [loom.derived :as ld]
+            [loom.graph :as lg]
+            [malli.core :as m]
+            [malli.error :as me]
+            [meta-merge.core :as mm])
+  (:import [clojure.lang ArityException]))
 
 ;;---
 ;;; specs
@@ -274,6 +274,17 @@
                                      system)}
            t))
 
+(defn- apply-signal-arity-exception
+  [system computation-stage t]
+  (ex-info (str "Signal handler for " computation-stage " should take 3 arguments")
+           {:reason   ::apply-signal-exception
+            :stage    computation-stage
+            :resolved (sp/select-one [::resolved (take 2 computation-stage)]
+                                     system)
+            :instance (sp/select-one [::instances (take 2 computation-stage)]
+                                     system)}
+           t))
+
 (defn- handler-lifecycle-names
   [signal-name]
   {:apply-signal signal-name
@@ -423,6 +434,10 @@
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
                              prepped-system)
+                            (catch ArityException t
+                              (throw (apply-signal-arity-exception prepped-system
+                                                                   computation-stage-node
+                                                                   t)))
                             (catch #?(:clj Throwable :cljs :default) t
                               (throw (apply-signal-exception prepped-system
                                                              computation-stage-node

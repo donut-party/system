@@ -285,3 +285,9 @@
        #"Invalid group ref"
        (ds/signal {::ds/defs {:group {:component {:ref (ds/group-ref :nonexistent)}}}}
                   :start))))
+
+(deftest signal-arity-exception-test
+  (is (thrown?
+       ExceptionInfo
+       (ds/signal {::ds/defs {:group {:component {:start (fn [])}}}}
+                  :start))))
