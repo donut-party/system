@@ -141,6 +141,8 @@
 ;;---
 ;;; ref resolution
 ;;---
+;; ref resolution makes ref'd component instances available to the ref'ing
+;; component for signal application
 
 (defn ref-exception
   [system referencing-component-id referenced-component-id]
@@ -194,17 +196,26 @@
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
-  the thing being ref'd. places result under ::resolved"
+  the thing being ref'd. places result under ::resolved. allows custom
+  resolution fns to be defined with ::resolve-refs, a feature used to work with
+  subsystems"
   [system component-id]
-  ;; allow custom resolution fns. right now this is specifically to accommodate
-  ;; subsystems.
   (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
 
 ;;---
-;;; generate component graphs
+;;; generate component signal apply order graphs
 ;;---
+;;
+;; The order in which signals are applied is important. For example, if an http
+;; server component depends on a db component, then when you're applying the the
+;; `:start` signal you should apply it to the db and then the http server. If
+;; you're applying the `:stop` signal, the order is reversed: http server, then
+;; db.
+;;
+;; These helpers create two digraphs to capture both orderings, using
+;; components' refs to determine graph edges.
 
 (defn- component-graph-nodes
   [system]
@@ -215,7 +226,11 @@
                (lg/digraph))))
 
 (defn- expand-refs-for-graph
-  "Expand local and group refs without going into subsystems"
+  "We use refs to determine the edges for the component order graphs. However,
+  there's a wrinkle in that in the graphs, nodes are component ids (a tuple of
+  `[:component-group-name :component-name]), whereas refs can take the form of
+  local refs -- (ref :component-name) -- or group refs
+  -- (group-ref :group-name). This function desugars both kinds of refs. "
   [system]
   (sp/transform [config-collect-group-path (sp/walker (some-fn ref? group-ref? system?))]
                 (fn [group-name x]
@@ -224,7 +239,6 @@
                     (system? x)
                     x
 
-                    ;; TODO handle group not existing
                     (group-ref? x)
                     (let [group-name (:key x)]
                       {group-name
@@ -262,6 +276,9 @@
           (ref-edges system direction)))
 
 (defn gen-graphs
+  "Generates order graphs. If `::selected-component-ids` is specified, graphs are
+  filtered to the union of all subgraphs reachable by the selected component
+  ids."
   [{:keys [::selected-component-ids] :as system}]
   (let [g         (component-graph-nodes system)
         topsorted (component-graph-add-edges g system :topsort)
@@ -347,6 +364,9 @@
 ;;---
 ;;; computation graph
 ;;---
+;;
+;; Signal application works by generating a "signal computation graph", where
+;; each node corresponds to a function that... TODO
 
 (defn gen-signal-computation-graph
   [system signal order]
@@ -491,7 +511,7 @@
         (recur (apply-signal-stage system computation-stage-node))))))
 
 ;;---
-;;; init, apply, etc
+;;; init system, apply signal
 ;;---
 
 (defn- set-component-keys
@@ -558,6 +578,8 @@
           systems))
 
 (defn validate-with-malli
+  "helper function for validating component instances with malli if a schema is
+  present."
   [{:keys [schema]} instance-val {:keys [->validation]}]
   (some-> (and schema (m/explain schema instance-val))
           ->validation))
@@ -567,6 +589,10 @@
 ;;---
 
 (defn- mapify-imports
+  "Subsystems can 'import' instances from the parent system. Imports are specified
+  as a set of refs; this converts that to a `ComponentGroups`` so that it can be
+  merged into subsystem's ::instances, thus making the parent instances
+  available for ref resolution."
   [imports]
   (reduce (fn [refmap ref]
             (sp/setval [(:key ref)] ref refmap))
@@ -592,6 +618,7 @@
                        (merge-imports system parent-system)))))
 
 (defn- forward-channel
+  "used to make all channel 'output' available at the top level"
   [parent-system channel component-id]
   (if-let [chan-val (sp/select-one [::instances component-id channel] parent-system)]
     (sp/setval [channel component-id]
@@ -607,7 +634,7 @@
       (forward-channel [::out :warn] component-id)
       (forward-channel [::out :validation] component-id)))
 
-(defn- forward-start
+(defn- forward-start-signal
   [signal-name]
   (fn [resolved _ {:keys [->instance]}]
     (-> resolved
@@ -616,7 +643,7 @@
         ->instance
         forward-channels)))
 
-(defn- forward-update
+(defn- forward-signal
   [signal-name]
   (fn [_ instance {:keys [->instance]}]
     (-> instance
@@ -626,9 +653,9 @@
 
 (defn subsystem-component
   [subsystem & [imports]]
-  {:start   (forward-start :start)
+  {:start   (forward-start-signal :start)
 
-   ::mk-signal-handler forward-update
+   ::mk-signal-handler forward-signal
    ::subsystem         subsystem
    ::imports           (mapify-imports imports)
    ::resolve-refs      subsystem-resolver})
