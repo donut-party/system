@@ -1,0 +1,23 @@
+(ns donut.examples.printer
+  (:require [donut.system :as ds]))
+
+(def system
+  {::ds/defs
+   {:services {:stack {:start (fn [_ _ _] (atom (vec (range 10))))
+                       :stop  (fn [_ instance _] (reset! instance []))}}
+    :app      {:printer {:start (fn [{:keys [stack]} _ _]
+                                  (doto (Thread.
+                                         (fn []
+                                           (prn "peek:" (peek @stack))
+                                           (swap! stack pop)
+                                           (Thread/sleep 1000)
+                                           (recur)))
+                                    (.start)))
+                         :stop  (fn [_ instance _]
+                                  (.interrupt instance))
+                         :stack (ds/ref [:services :stack])}}}})
+
+;; start the system, let it run for 5 seconds, then stop it
+(let [running-system (ds/signal system :start)]
+  (Thread/sleep 5000)
+  (ds/signal running-system :stop))
