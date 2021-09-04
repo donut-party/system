@@ -542,8 +542,8 @@
 
 (defn init-system
   [maybe-system signal-name component-keys]
-  (-> (merge {::signals default-signals}
-             maybe-system)
+  (-> (mm/meta-merge {::signals default-signals}
+                     maybe-system)
       merge-base
       (set-component-keys signal-name component-keys)
       gen-graphs))

@@ -3,8 +3,9 @@
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [_ _ _] (atom (vec (range 10))))
-                       :stop  (fn [_ instance _] (reset! instance []))}}
+   {:services {:stack {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
+                       :stop  (fn [_ instance _] (reset! instance []))
+                       :items 10}}
     :app      {:printer {:start (fn [{:keys [stack]} _ _]
                                   (doto (Thread.
                                          (fn []
@@ -21,3 +22,8 @@
 (let [running-system (ds/signal system :start)]
   (Thread/sleep 5000)
   (ds/signal running-system :stop))
+
+
+(def Stack
+  {:start (fn [_ _ _] (atom (vec (range 10))))
+   :stop  (fn [_ instance _] (reset! instance []))})
