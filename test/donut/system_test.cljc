@@ -284,6 +284,11 @@
                                 :env {:http-port 9090}}}
                (-> started
                    (ds/signal :stop)
+                   (select-keys [::ds/instances])))))
+
+      (testing "groups you can select groups"
+        (is (= {::ds/instances {:env {:http-port 9090}}}
+               (-> (ds/signal system-def :start #{:env})
                    (select-keys [::ds/instances]))))))))
 
 (deftest ref-undefined-test

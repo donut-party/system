@@ -28,7 +28,7 @@ that introduces *system* and *component* abstractions to:
   - Signals
   - Systems
 - Advanced Usage
-  - groups
+  - Groups and local refs
   - stages
   - local and group refs
   - component-ids
@@ -187,8 +187,8 @@ This approach to defining components lets us easily modify them. If you want to
 mock out a component, you just have to use `assoc-in` to assign a new `:start`
 signal handler.
 
-The value a signal handler returns is a _component instance_, which is stored in
-the system map under `::ds/instances`. Try this to see a system's instances:
+Signal handlers return a _component instance_, which is stored in the system map
+under `::ds/instances`. Try this to see a system's instances:
 
 ``` clojure
 (::ds/instances (ds/signal system :start))
@@ -203,6 +203,9 @@ system: the `:start` handler will create a new object or connection or thread
 pool or whatever, and place that under `::ds/instances`. The instance is passed
 to the `:stop` handler, which can call whatever functions or methods are needed
 to to deallocate the resource.
+
+You don't have to define a handler for every signal. Components that don't have
+a handler for a signal are essentially skipped.
 
 ### Refs
 
@@ -344,13 +347,164 @@ behavior. You send a signal to a system, and the system ensures its components
 handle the signal in the correct order.
 
 As you've seen, systems are implemented as maps. I sometimes refer to these maps
-as _system maps_ and _system states_. It can be useful, for example, to think of
-`ds/signal` as advancing system state: it takes a state as an argument and
-returns a new state.
+as _system maps_ or _system states_. It can be useful, for example, to think of
+`ds/signal` as taking a system state as an argument and returning a new state.
 
+donut.system follows a pattern that you might be used to if you've used
+interceptors: it places as much information as possible in the system map and
+uses that to drive execution. This lets us do cool and useful stuff like define
+custom signals.
 
+One day I'd like to write more about the advantages of taking the "world in a
+map" approach. In the mean time, [this Lambda Island blog post on Coffee
+Grinders](https://lambdaisland.com/blog/2020-03-29-coffee-grinders-2) does a
+good job of explaining it.
 
 ## Advanced Usage
+
+The topics covered so far should let you get started defining components and
+systems in your own projects. donut.system can also handle more complex use
+cases.
+
+### Groups and local refs
+
+All component definitions are organized into groups. As someone who compulsively
+lines up pens and straightens stacks of brochures, I think this extra level of
+tidiness is inherently good and needs no further explanation. The inclusion of
+component groups unlocks some useful capabilities that are less obvious, though,
+so let's talk about those. Component groups make it easier to:
+
+- Create multiple instances of a component
+- Send signals to sub-selections of components
+- Designate system stages
+
+I'll describe what I mean by "multiple instances" here, and I'll explain the
+rest in later sections.
+
+Let's say for some reason you want to run multiple HTTP servers. Here's how you
+could do that:
+
+``` clojure
+(ns donut.examples.multiple-http-servers
+  (:require [donut.system :as ds]
+            [ring.adapter.jetty :as rj]))
+
+
+(def HTTPServer
+  {:start   (fn [{:keys [handler options]} _ _]
+              (rj/run-jetty handler options))
+   :stop    (fn [_ instance _]
+              (.stop instance))
+   :handler (ds/ref :handler)
+   :options {:port  (ds/ref :port)
+             :join? false}})
+
+(def system
+  {::ds/defs
+   {:http-1 {:server  HTTPServer
+             :handler (fn [_req]
+                        {:status  200
+                         :headers {"ContentType" "text/html"}
+                         :body    "http server 1"})
+             :port    8080}
+
+    :http-2 {:server  HTTPServer
+             :handler (fn [_req]
+                        {:status  200
+                         :headers {"ContentType" "text/html"}
+                         :body    "http server 2"})
+             :port    9090}}})
+```
+
+First, we define the component `HTTPServer`. Notice that it has two refs,
+`(ds/ref :handler)` and `(ds/ref :port)`. These differ from the refs you've seen
+so far, which have been tuples of `[group-name component-name]`. Refs of the
+form `(ds/ref component-name)` are _local refs_, and will resolve to the
+component of the given name within the same group.
+
+You could create multiple instances of an HTTP server without groups, sure, but
+it would be more tedious and typo-prone. The fact is, some components actually
+are part of a group, so it makes sense to have first-class support for groups.
+
+### Selecting components
+
+You can select parts of a system to send a signal to:
+
+``` clojure
+(let [running-system (ds/signal system :start #{[:group-1 :component-1]
+                                                [:group-1 :component-2]})]
+  (ds/signal running-system :stop))
+```
+
+First, we call `ds/start` and pass it an optional second argument, a set of
+_selected components_ This will filter out all components that aren't
+descendants of `[:group-1 :component-1]` or `[:group-2 :component-2]` and send
+the `:start` signal only to them.
+
+Your selection is stored in the system state that gets returned, so when you
+call `(ds/stop running-system)` it only sends the `:stop` signal to the
+components that had received the `:start` signal.
+
+You can also select component groups by using just the group's name for your
+selection, like so:
+
+``` clojure
+(ds/signal system :start #{:group-1})
+```
+
+### Stages
+
+It might be useful to signal parts of your system in stages. For example, you
+might want to instantiate a logger and error reporter and use those if an
+exception is thrown when starting other components:
+
+``` clojure
+;; This is mostly pseudocode
+(def system
+  {::ds/defs
+   {:boot {:logger         {:start ...
+                            :stop  ...}
+           :error-reporter {:start ...
+                            :stop  ...}}
+    :app  {:server {:start ...}}}})
+
+(let [booted-system  (ds/signal system :start #{:boot})
+      logger         (get-in booted-system [::ds/instances :boot :logger])
+      error-reporter (get-in booted-system [::ds/instances :boot :error-reporter])]
+  (try (ds/signal booted-system :start)
+       (catch Exception e
+         (log logger e)
+         (report-error error-report e))))
+```
+
+Note that you would need to make the `:start` handlers for `:logger` and
+`:error-reporter` _idempotent_, meaning that calling `:start` on an
+already-started component should not create a new instance but use an existing
+one. The code would look something like this:
+
+``` clojure
+(fn [config instance _]
+  (or instance
+      (create-logger config)))
+```
+
+### Before, After, "Output", and ::base
+
+You can define `:before-` and `:after-` handlers for signals:
+
+``` clojure
+(def system
+  {::ds/defs
+   {:app {:server {:before-start (fn [_ _ _] (prn "before-start"))
+                   :start        (fn [_ _ _] (prn "start"))
+                   :after-start  (fn [_ _ _] (prn "after-start"))}}}})
+```
+
+### Validation
+
+### Subsystems
+
+### Named configs
 
 ## How it compares to alternatives
 
@@ -364,4 +518,4 @@ returns a new state.
 ## TODO
 
 - REPL tools
-- async signal application
+- async signal handling

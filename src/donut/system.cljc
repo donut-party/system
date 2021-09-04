@@ -61,6 +61,9 @@
   [:map
    [:order [:enum :topsort :reverse-topsort]]])
 
+(def ComponentSelection
+  [:or ComponentGroupName ComponentId])
+
 (def DonutSystem
   [:map
    [::defs ComponentGroups]
@@ -70,7 +73,7 @@
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
-   [::selected-component-ids {:optional true} [:set ComponentId]]])
+   [::selected-component-ids {:optional true} [:set ComponentSelection]]])
 
 (def system? (m/validator DonutSystem))
 
@@ -557,7 +560,8 @@
   (when-let [explanation (m/explain DonutSystem system)]
     (throw (ex-info "Invalid system"
                     {:reason             :system-spec-validation-error
-                     :spec-explain-human (me/humanize explanation)})))
+                     :spec-explain-human (me/humanize explanation)
+                     :spec-explain       explanation})))
 
   (let [inited-system (init-system system signal-name component-keys)]
     (when-let [explanation (m/explain (into [:enum] (sp/select [::signals sp/MAP-KEYS] inited-system))

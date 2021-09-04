@@ -17,8 +17,3 @@
                        :headers {"ContentType" "text/html"}
                        :body    "It's donut.system, baby!"})}}})
 
-(def system
-  {::ds/defs    {;; components go here
-                 }
-   ::ds/signals {:status   {:order :topsort}
-                 :validate {:order :reverse-topsort}}})
