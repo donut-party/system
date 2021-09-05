@@ -742,7 +742,7 @@ The `start` helper also takes an optional third argument to select components:
           )
 ```
 
-## How it compares to alternatives
+## Alternatives
 
 Other Clojure libraries in the same space:
 
@@ -751,13 +751,17 @@ Other Clojure libraries in the same space:
 - [Component](https://github.com/stuartsierra/component)
 - [Clip](https://github.com/juxt/clip)
 
-
+TODO write a more detailed comparison.
 
 ## Acknowledgments
 
-donut.system takes a
+donut.system takes inspiration from Component, Integrant, and Clip.
+
+## Examples
 
 ## TODO
 
 - REPL tools
 - async signal handling
+- Better examples
+- More consistent naming
