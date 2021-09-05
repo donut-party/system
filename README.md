@@ -641,6 +641,8 @@ example could be rewritten like this:
 
 ### Subsystems
 
+Woe be unto you if you ever have to compose a system from subsystems. But if you
+do, I've tried to make it pretty straightforward.
 
 ### Named configs
 
