@@ -488,7 +488,7 @@ one. The code would look something like this:
       (create-logger config)))
 ```
 
-### Before, After, "Output", and ::base
+### Before, After, Validation, and "Channels"
 
 You can define `:before-` and `:after-` handlers for signals:
 
@@ -500,9 +500,147 @@ You can define `:before-` and `:after-` handlers for signals:
                    :after-start  (fn [_ _ _] (prn "after-start"))}}}})
 ```
 
-### Validation
+You can use these to gather information about your system as it handles signals,
+and to perform validation. Let's look at a couple use cases: printing signal
+progress and validating configs. Here's how you might print signal progress:
+
+``` clojure
+(defn print-progress
+  [_ _ {:keys [::ds/component-id]}]
+  (prn component-id))
+
+(def system
+  {::ds/defs
+   {:group {:component-a {:start       "component a"
+                          :after-start print-progress}
+            :component-b {:depends-on  (ds/ref :component-a)
+                          :start       "component b"
+                          :after-start print-progress}}}})
+
+(ds/signal system :start)
+;; =>
+[:group :component-a]
+[:group :component-b]
+```
+
+The function `print-progress` is used as the `:after-start` handler for both
+`:component-a` and `:component-b`. It destructures `::ds/component-id` from the
+third argument and prints it. 
+
+We haven't seen the third argument used before; its value is the system map. The
+current component's id gets assoc'd into the system map under
+`::ds/component-id` prior to calling a signal handler, as do a collection of
+"channel" functions which we can use to gather information about components and
+perform validation. Look at how we destructure `->info` and `->validation` from
+the third argument in these `:after-start` handlers:
+
+``` clojure
+(def system
+  {::ds/defs
+   {:group {:component-a {:start       "component a"
+                          :after-start (fn [_ _ {:keys [->info]}]
+                                         (->info "component a is valid"))}
+            :component-b {:depends-on  (ds/ref :component-a)
+                          :start       "component b"
+                          :after-start (fn [_ _ {:keys [->validation]}]
+                                         (->validation "component b is invalid"))}
+            :component-c {:depends-on (ds/ref :component-a)
+                          :start      "component-c"
+                          :after-start (fn [_ _ _]
+                                         (prn "this won't print"))}}}})
+
+(::ds/out (ds/signal system :start))
+;; =>
+{:info       {:group {:component-a "component a is valid"}},
+ :validation {:group {:component-b "component b is invalid"}}}
+```
+
+Notice that `:component-c`'s `:after-start` handler doesn't get called. As it
+predicts, the string "this won't print" doesn't get printed.
+
+It's not obvious what's going on here, so let's step through it.
+
+1. `:component-a`'s `:after-start` gets called first. It destructures the
+   `->info` function out of the third argument. `->info` is a _channel function_
+   and its purpose is to allow signal handlers to place a value somewhere in the
+   system map in a convenient and consistent way. `->info` assoc'd into the
+   system map before a signal handler is called, and it closes is over the
+   "output path", which includes the current component id. This is why when you
+   call `(->info "component a is valid")`, the string `"component a is valid"`
+   ends up at the path `[::ds/out :info :group :component-a]`.
+2. `(->info "component a is valid")` returns a system map, and that updated
+   system map is conveyed forward to other components' signal handlers, until a
+   final system map is returned by `ds/signal`.
+   
+   But what if you want to use `:after-start` to perform a side effect? What
+   then?? Do these functions always have to return a system map?
+   
+   No. The rules for handling return values are:
+   
+   1. If a system map is returned, convey that forward
+   2. Otherwise, if this is a _lifecycle function_ (`:before-start` or `:after-start`)
+      ignore the return value
+   3. Otherwise, this is a signal handler (`:start`). Place its return value
+      under `::ds/instances`.
+3. `(->validation "component b is invalid")` is similar to `->info` in that it
+   places a value in the system map. However, it differs in that it also has
+   implicit control flow semantics: if at any point a value is placed under
+   `[::ds/out :validation]`, then the library will stop trying to send signals
+   to that component's descendants. (It's actually a little more nuanced than
+   that, and I cover those nuances below.)
+
+One way you could make use of these features is to write something like this:
+
+``` clojure
+(defn validate-component
+  [{:keys [schema] :as config} _ {:keys [->validation]}]
+  (when-let [errors (and schema (m/explain schema config))]
+    (->validation errors)))
+
+(def system
+  {::ds/defs
+   {:group {:component-a {:start       "component a"
+                          :schema      [:map [:foo :bar] [:baz :bux]]
+                          :after-start validate-component}
+            :component-b {:depends-on  (ds/ref :component-a)
+                          :schema      [:map [:foo :bar] [:baz :bux]]
+                          :start       "component b"
+                          :after-start validate-component}
+            :component-c {:depends-on  (ds/ref :component-a)
+                          :start       "component-c"
+                          :after-start validate-component}}}})
+```
+
+We can create a generic `validat-component` function that checks whether a
+component's definition contains a `:schema` key, and use that to validate the
+rest of the component definition.
+
+### ::ds/base
+
+You can add `::ds/base` key to a system map to define a "base" component
+definition that will get merged with the rest of your component defs. The last
+example could be rewritten like this:
+
+``` clojure
+(defn validate-component
+  [{:keys [schema] :as config} _ {:keys [->validation]}]
+  (when-let [errors (and schema (m/explain schema config))]
+    (->validation errors)))
+
+(def system
+  {::ds/base {:after-start validate-component}
+   ::ds/defs
+   {:group {:component-a {:start       "component a"
+                          :schema      [:map [:foo :bar] [:baz :bux]]}
+            :component-b {:depends-on  (ds/ref :component-a)
+                          :schema      [:map [:foo :bar] [:baz :bux]]
+                          :start       "component b"}
+            :component-c {:depends-on  (ds/ref :component-a)
+                          :start       "component-c"}}}})
+```
 
 ### Subsystems
+
 
 ### Named configs
 
