@@ -48,6 +48,9 @@ that introduces *system* and *component* abstractions to:
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## Status: 😬
+
+
 ## Purpose
 
 When building a non-trivial Clojure application you're faced with some problems
@@ -72,7 +75,6 @@ It's not obvious how to do implement and convey your system's architecture in a
 functional programming language like Clojure, where it's pretty much one giant
 pool of functions, and boundaries (namespaces, marking functions private) are
 more like swim lanes you can easily duck under than walls enforcing isolation.
-
 
 donut.system allows you to codify your application's areas of responsibility.
 
