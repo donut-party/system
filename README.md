@@ -1,5 +1,3 @@
-# donut.system
-
 donut.system is a dependency injection library for Clojure and ClojureScript
 that introduces *system* and *component* abstractions to:
 
@@ -19,31 +17,34 @@ that introduces *system* and *component* abstractions to:
 [donut.system :as ds]
 ```
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
 
-- Basic Usage
-  - Components
-  - Refs
-  - Constant Instances
-  - Signals
-  - Systems
-- Advanced Usage
-  - Groups and local refs
-  - stages
-  - local and group refs
-  - component-ids
-  - before and after
-  - "output"
-  - validation
-  - subsystems
-  - config multimethod
-- Purpose
-  - Organization aid
-  - Application startup and shutdown
-  - Virtual environment
-- How it compares to alternatives
-- Implementation overview
-- Other options
+- [Purpose](#purpose)
+  - [Architecture aid](#architecture-aid)
+  - [Application startup and shutdown](#application-startup-and-shutdown)
+  - [Virtual environment](#virtual-environment)
+- [Basic Usage](#basic-usage)
+  - [Components](#components)
+  - [Refs](#refs)
+  - [Constant Instances](#constant-instances)
+  - [Signals](#signals)
+  - [Custom Signals](#custom-signals)
+  - [Systems](#systems)
+- [Advanced Usage](#advanced-usage)
+  - [Groups and local refs](#groups-and-local-refs)
+  - [Selecting components](#selecting-components)
+  - [Stages](#stages)
+  - [Before, After, Validation, and "Channels"](#before-after-validation-and-channels)
+  - [::ds/base](#dsbase)
+  - [Subsystems](#subsystems)
+  - [Config helpers](#config-helpers)
+- [Alternatives](#alternatives)
+- [Acknowledgments](#acknowledgments)
+- [TODO](#todo)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 ## Purpose
 
@@ -757,11 +758,9 @@ TODO write a more detailed comparison.
 
 donut.system takes inspiration from Component, Integrant, and Clip.
 
-## Examples
-
 ## TODO
 
 - REPL tools
 - async signal handling
-- Better examples
-- More consistent naming
+- more examples
+- more consistent naming
