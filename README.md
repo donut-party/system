@@ -1,3 +1,5 @@
+# donut.system
+
 donut.system is a dependency injection library for Clojure and ClojureScript
 that introduces *system* and *component* abstractions to:
 
@@ -92,8 +94,6 @@ One of the challenges of building a non-trivial application with Clojure is
 - supporting a REPL workflow
 
 
-
-
 ## Basic Usage
 
 To use donut.system, you define a _system_ that contains _component
@@ -129,19 +129,14 @@ the `:stack` and prints it once a second:
 (let [running-system (ds/signal system :start)]
   (Thread/sleep 5000)
   (ds/signal running-system :stop))
-
-
-(def Stack
-  {:start (fn [_ _ _] (atom (vec (range 10))))
-   :stop  (fn [_ instance _] (reset! instance []))})
 ```
 
 In this example, you define `system`, a map that contains just one key,
 `::ds/defs`. `::ds/defs` is a map of _component groups_, of which there are two:
-`:services` and `:app`. The `:services` group has one component definition for a
-`:stack` component, and the `:app` group has one component definition for a
-`:printer` component. (`:app` and `:services` are arbitrary names with no
-special meaning; you can name groups whatever you want.)
+`:services` and `:app`. The `:services` group has one component definition,
+`:stack`, and the `:app` group has one component definition, `:printer`. (`:app`
+and `:services` are arbitrary names with no special meaning; you can name groups
+whatever you want.)
 
 Both component definitions contain `:start` and `:stop` signal handlers, and the
 `:printer` component definition contains a _ref_ to the `:stack` component.
@@ -201,9 +196,9 @@ is passed in as the second argument to the `:stop` signal handler.
 
 This is how you can allocate and deallocate the resources needed for your
 system: the `:start` handler will create a new object or connection or thread
-pool or whatever, and place that under `::ds/instances`. The instance is passed
-to the `:stop` handler, which can call whatever functions or methods are needed
-to to deallocate the resource.
+pool or whatever, and place that in the system map under `::ds/instances`. The
+instance is passed to the `:stop` handler, which can call whatever functions or
+methods are needed to to deallocate the resource.
 
 You don't have to define a handler for every signal. Components that don't have
 a handler for a signal are essentially skipped.
@@ -244,7 +239,7 @@ on a `:stack` instance to function correctly. Therefore, when we send a
 `:start` signal, it's handled by `:stack` before `:printer.`
 
 The `:printer` component's `:start` signal handle destructures `stack` from its
-first argument. It's value is the `:stack` component's instance, the atom that
+first argument. Its value is the `:stack` component's instance, the atom that
 gets created by `:stack`'s `:start` signal handler.
 
 ### Constant Instances
@@ -297,11 +292,11 @@ called in the correct order. I had to pick some to convey the idea of "make all
 the components do a thing", and signal handling seemed like a good metaphor.
 
 Using the term "signal" could be misleading, though, in that it implies some
-kind of communication medium: a socket, a semaphor, an interrupt. That's not the
-case. Internally, it's all just plain ol' function calls. If I talk about
-"sending" a signal, nothing's actually being sent. And anyway, even if something
-were getting sent, that shouldn't matter to you in using the library; it would
-be an implementation detail that should be transparent to you.
+kind of communication medium: a socket, a semaphor, an interrupt, whatever.
+That's not the case. Internally, it's all just plain ol' function calls. If I
+talk about "sending" a signal, nothing's actually being sent. And anyway, even
+if something were getting sent, that shouldn't matter to you in using the
+library; it would be an implementation detail that should be transparent to you.
 
 donut.system provides some sugar for built in functions: instead of calling
 `(ds/signal system :start)` you can call `(ds/start system)`.
@@ -376,7 +371,7 @@ component groups unlocks some useful capabilities that are less obvious, though,
 so let's talk about those. Component groups make it easier to:
 
 - Create multiple instances of a component
-- Send signals to sub-selections of components
+- Send signals to selections of components
 - Designate system stages
 
 I'll describe what I mean by "multiple instances" here, and I'll explain the
