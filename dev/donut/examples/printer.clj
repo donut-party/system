@@ -22,8 +22,3 @@
 (let [running-system (ds/signal system :start)]
   (Thread/sleep 5000)
   (ds/signal running-system :stop))
-
-
-(def Stack
-  {:start (fn [_ _ _] (atom (vec (range 10))))
-   :stop  (fn [_ instance _] (reset! instance []))})

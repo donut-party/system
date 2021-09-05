@@ -642,18 +642,120 @@ example could be rewritten like this:
 ### Subsystems
 
 Woe be unto you if you ever have to compose a system from subsystems. But if you
-do, I've tried to make it pretty straightforward.
+do, I've tried to make it straightforward. Check it out:
 
-### Named configs
+``` clojure
+(ns donut.examples.subsystem
+  (:require [donut.system :as ds]))
+
+(defn mk-print-thread
+  [prefix stack]
+  (doto (Thread.
+         (fn []
+           (prn prefix (peek @stack))
+           (swap! stack pop)
+           (Thread/sleep 1000)
+           (recur)))
+    (.start)))
+
+(defn print-worker-system
+  [print-prefix]
+  {::ds/defs
+   {:workers
+    {:print-worker {:start (fn [{:keys [stack]} _ _]
+                             (mk-print-thread print-prefix stack))
+                    :stop  (fn [_ instance _]
+                             (.stop instance))
+                    :stack (ds/ref [:services :stack])}}}})
+
+(def system
+  {::ds/defs
+   {:services {:stack {:start (fn [_ _ _] (atom (vec (range 20))))
+                       :stop  (fn [_ instance _] (reset! instance []))}}
+
+    :printers {:printer-1 (ds/subsystem-component
+                           (print-worker-system ":printer-1")
+                           #{(ds/group-ref :services)})
+               :printer-2 (ds/subsystem-component
+                           (print-worker-system ":printer-1")
+                           #{(ds/ref [:services :stack])})}}})
+```
+
+In this example, we're creating two subsystems (`[:printers printer-1]` and
+`[:printers :printer-2]`) that pop items from a shared stack component defined
+in the parent system, `[:services :stack]`.
+
+We generate definitions for the subsystems with the function
+`print-worker-system`, which returns a system definition with one component,
+`[:workers :print-worker]`. The component def has a key, `:stack`, which
+references `[:services :stack]`, but notice that there is no `[:services
+:stack]` component in the `print-worker-system` definition.
+
+The parent system wraps these subsystems with `ds/subsystem-component`.
+`ds/subsystem-component` returns a component def - a map with a `:start` signal
+handler that "forwards" the signal to the subsystem. The component def also
+includes the key `::ds/mk-signal-handler`, a privileged key that acts as default
+signal handler. `::ds/mk-signal-handler` is responsible for forwarding all other
+signals to the subsystem.
+
+`ds/subsystem-component` takes an optional second argument, a set of refs that
+should be imported into the subsystem. This is how the subsystems can reference
+the parent system's component `[:services :stack]`.
+
+### Config helpers
+
+`donut.system/config` is a multimethod you can use to register system configs.
+This can be useful for defining dev, test, and prod systems:
+
+``` clojure
+(defmethod ds/config :test
+  [_]
+  {::ds/defs ...})
+```
+
+Often you'll want to customize a config; you'll want to replace a component with
+a mock, for example. You can use the function `ds/system-config` to merge a
+registered system conf with overrides:
+
+``` clojure
+(ds/system-config :test {::ds/defs {:services {:queue mock-queue}}})
+```
+
+The signal helpers `ds/start`, `ds/stop`, `ds/suspend`, and `ds/resume` can take
+either a system name or a system map, and can take optional overrides:
+
+``` clojure
+(ds/start :test) ;; <- system name
+(ds/start {::ds/defs ...}) ;; <- system map
+
+;; use named system, with overrides
+(ds/start :test 
+          {::ds/defs {:services {:queue mock-queue}}})
+```
+
+The `start` helper also takes an optional third argument to select components:
+
+``` clojure
+(ds/start :test 
+          {::ds/defs {:services {:queue mock-queue}}}
+          #{[:app :http-server]} ;; <- component selection
+          )
+```
 
 ## How it compares to alternatives
 
-## Other options
+Other Clojure libraries in the same space:
 
 - [Integrant](https://github.com/weavejester/integrant)
 - [mount](https://github.com/tolitius/mount)
 - [Component](https://github.com/stuartsierra/component)
 - [Clip](https://github.com/juxt/clip)
+
+
+
+## Acknowledgments
+
+donut.system takes a
 
 ## TODO
 

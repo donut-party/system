@@ -673,7 +673,7 @@
   of the donut ecosystem."
   identity)
 
-(defn- system-config
+(defn system-config
   ([sconf]
    (cond (system? sconf)  sconf
          (keyword? sconf) (config sconf)))
