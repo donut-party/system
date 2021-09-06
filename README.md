@@ -744,25 +744,43 @@ each.
 
 ### Resource management
 
+donut.system helps allocate and deallocate resources like database connections
+and thread pools in the correct order. It also provides a systematic approach to
+accessing resources. When building an application, you have to manage these
+tasks _somehow_; a component library like donut.system gives you the tools to
+manage them in a consistent way.
 
+I have a half-baked thought about component libraries serving a purpose similar
+to tools like [systemd](https://systemd.io/), though in a much more limited
+scope. I'm not sure exactly where you want to go with it, but: component
+libraries are useful in building an application for reasons similar to why
+systemd is useful in managing a machine. In both cases, you want some consistent
+method for starting and stopping the actors in a computing environment. This
+work is not central to whatever business problem you're trying to solve, but it
+still has to get done, so it's nice to be able to use a tool that does that work
+for you that you can learn once and use across different projects.
 
 ### Virtual environment
 
-One of the challenges of building a non-trivial application with Clojure is 
+donut.system (and other component libraries) provide a kind of light-weight
+virtual environment for your application. Usually there's one-to-one
+relationship between a running process and a running application; component
+systems make it possible to run many instances of an application within a single
+process.
 
-- the challenge of having no boundaries
-  - public or private
-- managing interactions with the external world and with external services
-- allocating and de-allocating resources in order
-- supporting a REPL workflow
+The biggest benefit this brings is the ability to run dev and test systems at
+the same time. I can start a dev system with an HTTP server and a dev db
+connection from the REPL, and from the same REPL run integration tests with a
+separate HTTP server and db connection. It's a huge workflow improvement.
 
-### Objections
+## Objections
 
 Over the years, I've encountered two main objections to this approach:
 
 - It forces premature abstraction
 - It's too complex
 
+TODO address these concerns. (They're not necessarily wrong!)
 
 ## Alternatives
 
