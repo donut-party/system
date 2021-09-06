@@ -23,10 +23,7 @@ that introduces *system* and *component* abstractions to:
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
 
-- [Purpose](#purpose)
-  - [Architecture aid](#architecture-aid)
-  - [Application startup and shutdown](#application-startup-and-shutdown)
-  - [Virtual environment](#virtual-environment)
+- [Status: 😬](#status-)
 - [Basic Usage](#basic-usage)
   - [Components](#components)
   - [Refs](#refs)
@@ -42,6 +39,11 @@ that introduces *system* and *component* abstractions to:
   - [::ds/base](#dsbase)
   - [Subsystems](#subsystems)
   - [Config helpers](#config-helpers)
+- [Purpose](#purpose)
+  - [Architecture aid](#architecture-aid)
+  - [Resource management](#resource-management)
+  - [Virtual environment](#virtual-environment)
+- [Objections](#objections)
 - [Alternatives](#alternatives)
 - [Acknowledgments](#acknowledgments)
 - [TODO](#todo)
