@@ -50,51 +50,8 @@ that introduces *system* and *component* abstractions to:
 
 ## Status: 😬
 
-
-## Purpose
-
-When building a non-trivial Clojure application you're faced with some problems
-that don't have obvious solutions:
-
-- How do I break this into smaller parts that can be considered in
-  isolation?
-- How do I fit those parts back together?
-- How do I manage resources like database connections and thread pools?
-
-donut.system helps you address these problems by giving you tools for defining
-*components*, specifying their *behavior*, and composing them into *systems*.
-
-### Architecture aid
-
-We make application code more understandable and maintainable by identifying a
-system's responsibilities and organizing code around those responsibilities so
-that they can be considered and developed in isolation - in other words,
-implementing a system architecture.
-
-It's not obvious how to do implement and convey your system's architecture in a
-functional programming language like Clojure, where it's pretty much one giant
-pool of functions, and boundaries (namespaces, marking functions private) are
-more like swim lanes you can easily duck under than walls enforcing isolation.
-
-donut.system allows you to codify your application's areas of responsibility.
-
-donut.system helps you out by giving you a way to define components.
-
-Just by having components has a subtle benefit.
-
-### Application startup and shutdown
-
-### Virtual environment
-
-One of the challenges of building a non-trivial application with Clojure is 
-
-
-- the challenge of having no boundaries
-  - public or private
-- managing interactions with the external world and with external services
-- allocating and de-allocating resources in order
-- supporting a REPL workflow
-
+This library hasn't been used in production. I'm hoping some folks will find it
+interesting and want to try it out so that we can work out kinks and improve it.
 
 ## Basic Usage
 
@@ -739,6 +696,73 @@ The `start` helper also takes an optional third argument to select components:
           #{[:app :http-server]} ;; <- component selection
           )
 ```
+
+
+## Purpose
+
+When building a non-trivial Clojure application you're faced with some questions
+that don't have obvious answers:
+
+- How do I write code that's understandable and maintainable?
+- How do I manage resources like database connections and thread pools?
+- How do I manage test environments?
+
+donut.system helps you address these problems by giving you tools for
+encapsulating behavior in *components* and composing components into *systems*.
+
+### Architecture aid
+
+We can make application code more understandable and maintainable by identifying
+a system's responsibilities and organizing code around those responsibilities so
+that they can be considered and developed in isolation - in other words,
+defining a system architecture an implementing it with healthy doses of loose
+coupling and encapsulation.
+
+It's not obvious how to do implement and convey your system's architecture in a
+functional programming language like Clojure, where it's pretty much one giant
+pool of functions, and boundaries (namespaces, marking functions private) are
+more like swim lanes you can easily duck under than walls enforcing isolation.
+
+Using a component library like donut.system is one way for you to introduce such
+boundaries. When you program with components, you clarify your application's
+functional concerns, you codify (literally!) the relationships between different
+parts of your system, and you make the interfaces between them explicit. You
+avoid creating a codebase where any random function can access any random
+state - part of why you got into Clojure in the first place.
+
+Components facilitate writing loosely-coupled code. The benefits of that are
+well documented, but I'll briefly mention a couple here:
+
+- Loosely-coupled code is easier to understand because it reduces the scope of the
+  system you have to have in your head to understand what something is doing.
+- Loosely-coupled code is easier to maintain because it reduces the scope of
+  impact from changes.
+
+Components also aid discoverability. A system definition serves as a map that
+outlines the major "territories" of functionality, as well the entry point to
+each.
+
+### Resource management
+
+
+
+### Virtual environment
+
+One of the challenges of building a non-trivial application with Clojure is 
+
+- the challenge of having no boundaries
+  - public or private
+- managing interactions with the external world and with external services
+- allocating and de-allocating resources in order
+- supporting a REPL workflow
+
+### Objections
+
+Over the years, I've encountered two main objections to this approach:
+
+- It forces premature abstraction
+- It's too complex
+
 
 ## Alternatives
 
