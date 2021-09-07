@@ -4,7 +4,7 @@ donut.system is a dependency injection library for Clojure and ClojureScript
 that introduces *system* and *component* abstractions to:
 
 - help you organize your application
-- manage your application's (stateful) startup and shutdown behavior
+- manage your application's startup and shutdown behavior
 - provide a light virtual environment for your application, making it easier to
   mock services for testing
 
@@ -23,7 +23,6 @@ that introduces *system* and *component* abstractions to:
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
 
-- [Status: 😬](#status-)
 - [Basic Usage](#basic-usage)
   - [Components](#components)
   - [Refs](#refs)
@@ -46,14 +45,10 @@ that introduces *system* and *component* abstractions to:
 - [Objections](#objections)
 - [Alternatives](#alternatives)
 - [Acknowledgments](#acknowledgments)
+- [Status: 🤔](#status-)
 - [TODO](#todo)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-## Status: 😬
-
-This library hasn't been used in production. I'm hoping some folks will find it
-interesting and want to try it out so that we can work out kinks and improve it.
 
 ## Basic Usage
 
@@ -62,8 +57,8 @@ definitions_. A component definition can include _references_ to other
 components and _signal handlers_ that specify behavior. 
 
 Here's an example system that defines a `:printer` component and a `:stack`
-component. When it receives the `:start` signal, the `:printer` pops an item off
-the `:stack` and prints it once a second:
+component. When the system receives the `:start` signal, the `:printer` pops an
+item off the `:stack` and prints it once a second:
 
 ``` clojure
 (ns donut.examples.printer
@@ -103,8 +98,8 @@ Both component definitions contain `:start` and `:stop` signal handlers, and the
 `:printer` component definition contains a _ref_ to the `:stack` component.
 
 You start the system by calling `(ds/signal system :start)` - this produces an
-updated system map, `running-system`, which you then use when stopping the
-system with `(ds/signal running-system :stop)`.
+updated system map (bound to `running-system`) which you then use when stopping
+the system with `(ds/signal running-system :stop)`.
 
 ### Components
 
@@ -127,11 +122,11 @@ Components are organized under _component groups_. I cover some interesting
 things you can do with groups below, but for now you can just consider them an
 organizational aid. This system map includes the component group `:services`.
 
-Note that there's no special reason to break out the `Stack` component
+(Note that there's no special reason to break out the `Stack` component
 definition into a top-level var. I just thought it would make the example more
-readable.
+readable.)
 
-A def map can contain signal handlers, which are used to create component
+A def map can contain _signal handlers_, which are used to create component
 _instances_ and implement component _behavior_. A def can also contain
 additional configuration values that will get passed to the signal handlers.
 
@@ -798,6 +793,11 @@ TODO write a more detailed comparison.
 ## Acknowledgments
 
 donut.system takes inspiration from Component, Integrant, and Clip.
+
+## Status: 🤔
+
+This library hasn't been used in production. I'm hoping some folks will find it
+interesting and want to try it out so that we can work out kinks and improve it.
 
 ## TODO
 
