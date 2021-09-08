@@ -805,3 +805,4 @@ interesting and want to try it out so that we can work out kinks and improve it.
 - async signal handling
 - more examples
 - more consistent naming
+- discuss the value of dependency injection
