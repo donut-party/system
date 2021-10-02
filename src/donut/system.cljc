@@ -113,12 +113,7 @@
                "")
        keyword))
 
-(defn fmt
-  "just let me format a string in peace"
-  [& args]
-  (apply #?(:clj format :cljs gstring/format)
-         args))
-
+(def fmt #?(:clj format :cljs gstr/format))
 
 ;;---
 ;;; merge component defs
@@ -549,6 +544,7 @@
                      maybe-system)
       merge-base
       (set-component-keys signal-name component-keys)
+      (assoc ::last-signal signal-name)
       gen-graphs))
 
 (defn- clean-after-signal-apply
@@ -663,6 +659,13 @@
    ::subsystem         subsystem
    ::imports           (mapify-imports imports)
    ::resolve-refs      subsystem-resolver})
+
+(defn alias-component
+  "creates a compnoent that just provides an instance defined elsewhere in the system"
+  [component-id]
+  {:start             (fn [{:keys [aliased-component]}]
+                        aliased-component)
+   :aliased-component (ref component-id)})
 
 ;;---
 ;;; sugar; system config helper, lift signals to fns
