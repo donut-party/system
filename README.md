@@ -97,7 +97,7 @@ whatever you want.)
 Both component definitions contain `:start` and `:stop` signal handlers, and the
 `:printer` component definition contains a _ref_ to the `:stack` component.
 
-You start the system by calling `(ds/signal system :start)` - this produces an
+You start the system by calling `(ds/signal system :start)`. This produces an
 updated system map (bound to `running-system`) which you then use when stopping
 the system with `(ds/signal running-system :stop)`.
 
@@ -127,8 +127,8 @@ definition into a top-level var. I just thought it would make the example more
 readable.)
 
 A def map can contain _signal handlers_, which are used to create component
-_instances_ and implement component _behavior_. A def can also contain
-additional configuration values that will get passed to the signal handlers.
+_instances_ and implement component behavior. A def can also contain additional
+configuration values that will get passed to the signal handlers.
 
 In the example above, we've defined `:start` and `:stop` signal handlers. Signal
 handlers are just functions with three arguments. The first argument is the
@@ -157,7 +157,8 @@ instance is passed to the `:stop` handler, which can call whatever functions or
 methods are needed to to deallocate the resource.
 
 You don't have to define a handler for every signal. Components that don't have
-a handler for a signal are essentially skipped.
+a handler for a signal are essentially skipped when you send a signal to a
+system.
 
 ### Refs
 
@@ -244,26 +245,30 @@ It would be annoying and possibly confusing to have to write something like
 We've seen how you can specify signal handlers for components, but what is a
 signal? The best way to understand them is behaviorally: when you call the
 `ds/signal` function on a system, then each component's signal handler gets
-called in the correct order. I had to pick some to convey the idea of "make all
-the components do a thing", and signal handling seemed like a good metaphor.
+called in the correct order. I needed to convey the idea of "make all the
+components do a thing", and signal handling seemed like a good metaphor.
 
-Using the term "signal" could be misleading, though, in that it implies some
-kind of communication medium: a socket, a semaphor, an interrupt, whatever.
-That's not the case. Internally, it's all just plain ol' function calls. If I
-talk about "sending" a signal, nothing's actually being sent. And anyway, even
-if something were getting sent, that shouldn't matter to you in using the
-library; it would be an implementation detail that should be transparent to you.
+Using the term "signal" could be misleading, though, in that it implies the use
+of a communication primitive like a socket, a semaphor, or an interrup. That's
+not the case. Internally, it's all just plain ol' function calls. If I talk
+about "sending" a signal, nothing's actually being sent. And anyway, even if
+something were getting sent, that shouldn't matter to you in using the library;
+it would be an implementation detail that should be transparent to you.
 
-donut.system provides some sugar for built in functions: instead of calling
+donut.system provides some sugar for built-in signals: instead of calling
 `(ds/signal system :start)` you can call `(ds/start system)`.
 
 ### Custom Signals
 
 There's a more interesting reason for the use of _signal_, though: I want signal
-handling to be extensible. Out of the box, donut.system recognizes `:start`,
-`:stop`, `:suspend`, and `:resume`, but it's possible to handle
-additional signals -- maybe `:validate` or `:status`. To do that, you just need
-to add a little configuration to your system:
+handling to be extensible. Other component libraries use the term _lifecycle_,
+which I think doesn't convey the sense of extensibility that's possible with
+donut.system.
+
+Out of the box, donut.system recognizes `:start`, `:stop`, `:suspend`, and
+`:resume` signals, but it's possible to handle arbitrary signals -- say,
+`:validate` or `:status`. To do that, you just need to add a little
+configuration to your system:
 
 ``` clojure
 (def system
@@ -273,19 +278,18 @@ to add a little configuration to your system:
                  :validate {:order :reverse-topsort}}})
 ```
 
-`::ds/signals` is a map where keys are signal names are maps are configuration.
-There's only one configuration option, `:order`, and the values can be
+`::ds/signals` is a map where keys are signal names and values are configuration
+maps. There's only one configuration key, `:order`, and the value can be
 `:topsort` or `:reverse-topsort`. This specifies the order that components'
 signal handlers should be called. `:topsort` means that if Component A refers to
 Component B, then Component A's handler will be called first; reverse is, well,
 the reverse.
 
 The map you specify under `::ds/signals` will get merged with the default signal
-map:
+map, which is:
 
 ``` clojure
 (def default-signals
-  "which graph to follow to apply signal"
   {:start   {:order :reverse-topsort}
    :stop    {:order :topsort}
    :suspend {:order :topsort}
@@ -322,9 +326,10 @@ cases.
 
 All component definitions are organized into groups. As someone who compulsively
 lines up pens and straightens stacks of brochures, I think this extra level of
-tidiness is inherently good and needs no further explanation. The inclusion of
-component groups unlocks some useful capabilities that are less obvious, though,
-so let's talk about those. Component groups make it easier to:
+tidiness is inherently good and needs no further explanation.
+
+The inclusion of component groups unlocks some useful capabilities that are less
+obvious, though, so let's talk about those. Component groups make it easier to:
 
 - Create multiple instances of a component
 - Send signals to selections of components
@@ -374,9 +379,11 @@ so far, which have been tuples of `[group-name component-name]`. Refs of the
 form `(ds/ref component-name)` are _local refs_, and will resolve to the
 component of the given name within the same group.
 
-You could create multiple instances of an HTTP server without groups, sure, but
-it would be more tedious and typo-prone. The fact is, some components actually
-are part of a group, so it makes sense to have first-class support for groups.
+This little sprinkling of abstraction creates more possibilities for component
+modularity and reuse. You could create multiple instances of an HTTP server
+without groups, sure, but it would be more tedious and typo-prone. The fact is,
+some components actually are part of a group, so it makes sense to have
+first-class support for groups.
 
 ### Selecting components
 
@@ -452,9 +459,11 @@ You can define `:before-` and `:after-` handlers for signals:
                    :after-start  (fn [_ _ _] (prn "after-start"))}}}})
 ```
 
-You can use these to gather information about your system as it handles signals,
-and to perform validation. Let's look at a couple use cases: printing signal
-progress and validating configs. Here's how you might print signal progress:
+You can use these _lifecycle functions_ to gather information about your system
+as it handles signals, and to perform validation. Let's look at a couple use
+cases: printing signal progress and validating configs.
+
+Here's how you might print signal progress:
 
 ``` clojure
 (defn print-progress
@@ -481,10 +490,12 @@ third argument and prints it.
 
 We haven't seen the third argument used before; its value is the system map. The
 current component's id gets assoc'd into the system map under
-`::ds/component-id` prior to calling a signal handler, as do a collection of
-"channel" functions which we can use to gather information about components and
-perform validation. Look at how we destructure `->info` and `->validation` from
-the third argument in these `:after-start` handlers:
+`::ds/component-id` prior to calling a signal handler.
+
+The system map also has a collection of "channel" functions merged into it which
+we can use to gather information about components and perform validation. Look
+at how we destructure `->info` and `->validation` from the third argument in
+these `:after-start` handlers:
 
 ``` clojure
 (def system
@@ -551,16 +562,16 @@ One way you could make use of these features is to write something like this:
 
 (def system
   {::ds/defs
-   {:group {:component-a {:start       "component a"
-                          :schema      [:map [:foo :bar] [:baz :bux]]
-                          :after-start validate-component}
-            :component-b {:depends-on  (ds/ref :component-a)
-                          :schema      [:map [:foo :bar] [:baz :bux]]
-                          :start       "component b"
-                          :after-start validate-component}
-            :component-c {:depends-on  (ds/ref :component-a)
-                          :start       "component-c"
-                          :after-start validate-component}}}})
+   {:group {:component-a {:start        "component a"
+                          :schema       [:map [:foo :bar] [:baz :bux]]
+                          :before-start validate-component}
+            :component-b {:depends-on   (ds/ref :component-a)
+                          :schema       [:map [:foo :bar] [:baz :bux]]
+                          :start        "component b"
+                          :before-start validate-component}
+            :component-c {:depends-on   (ds/ref :component-a)
+                          :start        "component-c"
+                          :before-start validate-component}}}})
 ```
 
 We can create a generic `validat-component` function that checks whether a
@@ -643,12 +654,12 @@ We generate definitions for the subsystems with the function
 references `[:services :stack]`, but notice that there is no `[:services
 :stack]` component in the `print-worker-system` definition.
 
-The parent system wraps these subsystems with `ds/subsystem-component`.
-`ds/subsystem-component` returns a component def - a map with a `:start` signal
-handler that "forwards" the signal to the subsystem. The component def also
-includes the key `::ds/mk-signal-handler`, a privileged key that acts as default
-signal handler. `::ds/mk-signal-handler` is responsible for forwarding all other
-signals to the subsystem.
+The parent system wraps these subsystems with a call to
+`ds/subsystem-component`. `ds/subsystem-component` returns a component def, a
+map with a `:start` signal handler that "forwards" the signal to the subsystem.
+The component def also includes the key `::ds/mk-signal-handler`, a privileged
+key that acts as default signal handler. `::ds/mk-signal-handler` is responsible
+for forwarding all other signals to the subsystem.
 
 `ds/subsystem-component` takes an optional second argument, a set of refs that
 should be imported into the subsystem. This is how the subsystems can reference
@@ -696,6 +707,9 @@ The `start` helper also takes an optional third argument to select components:
 
 
 ## Purpose
+
+Now that we've covered how to use the library, let's talk about why you'd use
+it.
 
 When building a non-trivial Clojure application you're faced with some questions
 that don't have obvious answers:
