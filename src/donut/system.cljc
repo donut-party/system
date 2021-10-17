@@ -683,7 +683,10 @@
   ([sconf custom-config]
    (let [cfg (system-config sconf)]
      (cond (map? custom-config) (mm/meta-merge cfg custom-config)
-           (fn? custom-config)  (custom-config cfg)))))
+           (fn? custom-config)  (custom-config cfg)
+           (not custom-config)  cfg
+           :else                (throw (ex-info "custom config must be a map or function"
+                                                {:custom-config custom-config}))))))
 
 (defn start
   ([config-name]
