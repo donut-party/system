@@ -671,6 +671,11 @@
 ;;; sugar; system config helper, lift signals to fns
 ;;---
 
+(defn const
+  "Helper for constant map components"
+  [m]
+  {:start m})
+
 (defmulti config
   "A way to name different configs, e.g. :test, :dev, :prod, etc. Used by the rest
   of the donut ecosystem."
