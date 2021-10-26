@@ -202,6 +202,10 @@
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
 
+(defn resolved
+  [{:keys [::component-id ::resolved]}]
+  (sp/select-one component-id resolved))
+
 ;;---
 ;;; generate component signal apply order graphs
 ;;---
@@ -402,7 +406,7 @@
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
-  (stage-fn (sp/select-one [::resolved component-id] system)
+  (stage-fn (sp/select-one [::resolved component-id :conf] system)
             (sp/select-one [::instances component-id] system)
             (merge system (channel-fns system component-id))))
 
@@ -452,7 +456,7 @@
                                     (map? maybe-signal-constant)
                                     (or (sp/select-one [::resolved computation-stage-node] system)
                                         (sp/select-one [::resolved component-id ::constant] system)
-                                        (if-let [generic-handler (sp/select-one [::resolved component-id ::mk-signal-handler]
+                                        (when-let [generic-handler (sp/select-one [::resolved component-id ::mk-signal-handler]
                                                                                 system)]
                                           (generic-handler (last computation-stage-node)))
                                         system-identity)
@@ -478,9 +482,10 @@
 
 (defn- prep-system-for-apply-signal-stage
   [system component-id]
-  (-> system
-      (assoc ::component-id component-id)
-      (resolve-refs component-id)))
+  (let [part-prepped (-> system
+                         (assoc ::component-id component-id)
+                         (resolve-refs component-id))]
+    (assoc part-prepped ::resolved-component (resolved part-prepped))))
 
 (defn apply-signal-stage
   [system computation-stage-node]
@@ -580,9 +585,10 @@
 (defn validate-with-malli
   "helper function for validating component instances with malli if a schema is
   present."
-  [{:keys [schema]} instance-val {:keys [->validation]}]
-  (some-> (and schema (m/explain schema instance-val))
-          ->validation))
+  [_ instance-val {:keys [->validation ::resolved-component]}]
+  (let [{:keys [schema]} resolved-component]
+    (some-> (and schema (m/explain schema instance-val))
+            ->validation)))
 
 ;;---
 ;;; subsystems
@@ -636,8 +642,8 @@
 
 (defn- forward-start-signal
   [signal-name]
-  (fn [resolved _ {:keys [->instance]}]
-    (-> resolved
+  (fn [_ _ {:keys [->instance ::resolved-component]}]
+    (-> resolved-component
         ::subsystem
         (signal signal-name)
         ->instance
@@ -652,13 +658,14 @@
         forward-channels)))
 
 (defn subsystem-component
+  "Decorates a subsystem so that it can respond to signals when embedded in a
+  parent component."
   [subsystem & [imports]]
-  {:start   (forward-start-signal :start)
-
+  {:start              (forward-start-signal :start)
    ::mk-signal-handler forward-signal
-   ::subsystem         subsystem
+   ::resolve-refs      subsystem-resolver
    ::imports           (mapify-imports imports)
-   ::resolve-refs      subsystem-resolver})
+   ::subsystem         subsystem})
 
 (defn alias-component
   "creates a compnoent that just provides an instance defined elsewhere in the system"
