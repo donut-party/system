@@ -85,7 +85,7 @@
 ;; ComponentB when a signal is applied
 (defrecord Ref [key])
 (defn ref? [x] (instance? Ref x))
-(defn ref [k] (->Ref k))
+(defn ref [k] (with-meta (->Ref k) {:replace true}))
 
 ;; When ComponentA has a group ref to ComponentB, ComponentA is passed the
 ;; map of all instances under `key` when a signal is applied
