@@ -3,9 +3,10 @@
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
+   {:services {:stack {:start (fn [{:keys [items]} _ _]
+                                (atom (vec (range items))))
                        :stop  (fn [_ instance _] (reset! instance []))
-                       :items 10}}
+                       :conf  {:items 10}}}
     :app      {:printer {:start (fn [{:keys [stack]} _ _]
                                   (doto (Thread.
                                          (fn []
@@ -16,7 +17,7 @@
                                     (.start)))
                          :stop  (fn [_ instance _]
                                   (.interrupt instance))
-                         :stack (ds/ref [:services :stack])}}}})
+                         :conf  {:stack (ds/ref [:services :stack])}}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
 (let [running-system (ds/signal system :start)]
