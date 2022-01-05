@@ -1,14 +1,14 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require [com.rpl.specter :as sp]
-            #?(:cljs [goog.string :as gstring])
+             #?(:cljs [goog.string.format :as gstrf])
             [loom.alg :as la]
             [loom.derived :as ld]
             [loom.graph :as lg]
             [malli.core :as m]
             [malli.error :as me]
             [meta-merge.core :as mm])
-  (:import [clojure.lang ArityException]))
+  (:import #?(:clj [clojure.lang ArityException])))
 
 ;;---
 ;;; specs
@@ -113,7 +113,7 @@
                "")
        keyword))
 
-(def fmt #?(:clj format :cljs gstr/format))
+(def fmt #?(:clj format :cljs gstrf/format))
 
 ;;---
 ;;; merge component defs
@@ -493,7 +493,7 @@
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
                              prepped-system)
-                            (catch ArityException t
+                            (catch #?(:clj ArityException :cljs :default) t
                               (throw (apply-signal-arity-exception prepped-system
                                                                    computation-stage-node
                                                                    t)))
