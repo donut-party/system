@@ -16,5 +16,5 @@
   :cljs  {:extra-deps {olical/cljs-test-runner {:mvn/version "3.8.0"}}
           :main-opts  ["-m" "cljs-test-runner.main"]}
   :build {:deps       {io.github.seancorfield/build-clj
-                       {:git/tag "v0.1.2" :git/sha "0719a09"}}
+                       {:git/tag "v0.6.6" :git/sha "171d5f1"}}
           :ns-default build}}}
