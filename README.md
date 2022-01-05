@@ -10,10 +10,10 @@ that introduces *system* and *component* abstractions to:
 
 ``` clojure
 ;; deps.edn
-{club.donutpower/system {:mvn/version "0.0.85"}}
+{club.donutpower/system {:mvn/version "0.0.94"}}
 
 ;; lein
-[club.donutpower/system "0.0.85"]
+[club.donutpower/system "0.0.94"]
 
 ;; require
 [donut.system :as ds]
@@ -66,9 +66,10 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
+   {:services {:stack {:start (fn [{:keys [items]} _ _]
+                                (atom (vec (range items))))
                        :stop  (fn [_ instance _] (reset! instance []))
-                       :items 10}}
+                       :conf  {:items 10}}}
     :app      {:printer {:start (fn [{:keys [stack]} _ _]
                                   (doto (Thread.
                                          (fn []
@@ -79,12 +80,13 @@ item off the `:stack` and prints it once a second:
                                     (.start)))
                          :stop  (fn [_ instance _]
                                   (.interrupt instance))
-                         :stack (ds/ref [:services :stack])}}}})
+                         :conf  {:stack (ds/ref [:services :stack])}}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
 (let [running-system (ds/signal system :start)]
   (Thread/sleep 5000)
   (ds/signal running-system :stop))
+
 ```
 
 In this example, you define `system`, a map that contains just one key,
@@ -94,8 +96,9 @@ In this example, you define `system`, a map that contains just one key,
 and `:services` are arbitrary names with no special meaning; you can name groups
 whatever you want.)
 
-Both component definitions contain `:start` and `:stop` signal handlers, and the
-`:printer` component definition contains a _ref_ to the `:stack` component.
+Both component definitions contain `:start` and `:stop` signal handlers, as well
+as a `:conf`. The `:printer` component's `:conf` contains a _ref_ to the
+`:stack` component.
 
 You start the system by calling `(ds/signal system :start)`. This produces an
 updated system map (bound to `running-system`) which you then use when stopping
@@ -113,7 +116,7 @@ this system with a single component definition shows:
 (def Stack
   {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
    :stop  (fn [_ instance _] (reset! instance []))
-   :items 10})
+   :conf  {:items 10})
 
 (def system {::ds/defs {:services {:stack Stack}}})
 ```
@@ -132,8 +135,8 @@ configuration values that will get passed to the signal handlers.
 
 In the example above, we've defined `:start` and `:stop` signal handlers. Signal
 handlers are just functions with three arguments. The first argument is the
-component definition itself: you can see that the `:start` handler destructures
-`items` out of its first argument. The value of `items` will be `10`.
+value of `:conf`: you can see that the `:start` handler destructures `items` out
+of its first argument. The value of `items` will be `10`.
 
 This approach to defining components lets us easily modify them. If you want to
 mock out a component, you just have to use `assoc-in` to assign a new `:start`
@@ -169,9 +172,10 @@ stack printer again:
 ``` clojure
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
+   {:services {:stack {:start (fn [{:keys [items]} _ _]
+                                (atom (vec (range items))))
                        :stop  (fn [_ instance _] (reset! instance []))
-                       :items 10}}
+                       :conf  {:items 10}}}
     :app      {:printer {:start (fn [{:keys [stack]} _ _]
                                   (doto (Thread.
                                          (fn []
@@ -182,7 +186,7 @@ stack printer again:
                                     (.start)))
                          :stop  (fn [_ instance _]
                                   (.interrupt instance))
-                         :stack (ds/ref [:services :stack])}}}})
+                         :conf  {:stack (ds/ref [:services :stack])}}}}})
 ```
 
 The last line includes `:stack (ds/ref [:services :stack])`. `ds/ref` is a
@@ -213,13 +217,13 @@ Consider this system:
 (def system
   {::ds/defs
    {:env  {:http-port 8080}
-    :http {:server  {:start   (fn [{:keys [handler options]} _ _]
+    :http {:server  {:start (fn [{:keys [handler options]} _ _]
                                 (rj/run-jetty handler options))
-                     :stop    (fn [_ instance _]
+                     :stop  (fn [_ instance _]
                                 (.stop instance))
-                     :handler (ds/ref :handler)
-                     :options {:port  (ds/ref [:env :http-port])
-                               :join? false}}
+                     :conf  {:handler (ds/ref :handler)
+                             :options {:port  (ds/ref [:env :http-port])
+                                       :join? false}}}
            :handler (fn [_req]
                       {:status  200
                        :headers {"ContentType" "text/html"}
@@ -343,18 +347,19 @@ could do that:
 
 ``` clojure
 (ns donut.examples.multiple-http-servers
-  (:require [donut.system :as ds]
-            [ring.adapter.jetty :as rj]))
+  (:require
+   [donut.system :as ds]
+   [ring.adapter.jetty :as rj]))
 
 
 (def HTTPServer
-  {:start   (fn [{:keys [handler options]} _ _]
-              (rj/run-jetty handler options))
-   :stop    (fn [_ instance _]
-              (.stop instance))
-   :handler (ds/ref :handler)
-   :options {:port  (ds/ref :port)
-             :join? false}})
+  {:start (fn [{:keys [handler options]} _ _]
+            (rj/run-jetty handler options))
+   :stop  (fn [_ instance _]
+            (.stop instance))
+   :conf  {:handler (ds/ref :handler)
+           :options {:port  (ds/ref :port)
+                     :join? false}}})
 
 (def system
   {::ds/defs
@@ -363,14 +368,14 @@ could do that:
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 1"})
-             :port    8080}
+             :conf    {:port 8080}}
 
     :http-2 {:server  HTTPServer
              :handler (fn [_req]
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 2"})
-             :port    9090}}})
+             :conf    {:port 9090}}}})
 ```
 
 First, we define the component `HTTPServer`. Notice that it has two refs,
@@ -629,7 +634,7 @@ do, I've tried to make it straightforward. Check it out:
                              (mk-print-thread print-prefix stack))
                     :stop  (fn [_ instance _]
                              (.stop instance))
-                    :stack (ds/ref [:services :stack])}}}})
+                    :conf  {:stack (ds/ref [:services :stack])}}}}})
 
 (def system
   {::ds/defs
@@ -640,7 +645,7 @@ do, I've tried to make it straightforward. Check it out:
                            (print-worker-system ":printer-1")
                            #{(ds/group-ref :services)})
                :printer-2 (ds/subsystem-component
-                           (print-worker-system ":printer-1")
+                           (print-worker-system ":printer-2")
                            #{(ds/ref [:services :stack])})}}})
 ```
 

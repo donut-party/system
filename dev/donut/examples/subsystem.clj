@@ -19,7 +19,7 @@
                              (mk-print-thread print-prefix stack))
                     :stop  (fn [_ instance _]
                              (.stop instance))
-                    :stack (ds/ref [:services :stack])}}}})
+                    :conf  {:stack (ds/ref [:services :stack])}}}}})
 
 (def system
   {::ds/defs
