@@ -417,6 +417,25 @@
       (select-keys [:errors :validation])
       empty?))
 
+;; copied from loom.graph to work around its bizarre cljs (:in g) issue
+(defn- remove-adj-nodes [m nodes adjacents remove-fn]
+  (reduce
+   (fn [m n]
+     (if (m n)
+       (update-in m [n] #(apply remove-fn % nodes))
+       m))
+   (apply dissoc m nodes)
+   adjacents))
+
+(defn remove-nodes
+  [g nodes]
+  (let [ins (mapcat #(lg/predecessors g %) nodes)
+        outs (mapcat #(lg/successors g %) nodes)]
+    (-> g
+        (update-in [:nodeset] #(apply disj % nodes))
+        (assoc :adj (remove-adj-nodes (:adj g) nodes ins disj))
+        (assoc :in (remove-adj-nodes (:in g) nodes outs disj)))))
+
 (defn prune-signal-computation-graph
   [system computation-stage-node]
   (update system
@@ -425,14 +444,14 @@
             (->> computation-stage-node
                  (ld/subgraph-reachable-from graph)
                  (lg/nodes)
-                 (apply lg/remove-nodes graph)))))
+                 (remove-nodes graph)))))
 
 (defn remove-signal-computation-stage-node
   [system computation-stage-node]
   (update system
           ::signal-computation-graph
-          lg/remove-nodes
-          computation-stage-node))
+          remove-nodes
+          [computation-stage-node]))
 
 (defn handler-stage-fn
   [system computation-stage-node]
@@ -493,11 +512,13 @@
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
                              prepped-system)
-                            (catch #?(:clj ArityException :cljs :default) t
+                            (catch #?(:clj ArityException
+                                      :cljs js/Error) t
                               (throw (apply-signal-arity-exception prepped-system
                                                                    computation-stage-node
                                                                    t)))
-                            (catch #?(:clj Throwable :cljs :default) t
+                            (catch #?(:clj Throwable
+                                      :cljs js/Error) t
                               (throw (apply-signal-exception prepped-system
                                                              computation-stage-node
                                                              t))))]
