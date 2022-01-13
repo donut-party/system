@@ -512,11 +512,13 @@
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
                              prepped-system)
-                            (catch #?(:clj ArityException
-                                      :cljs js/Error) t
-                              (throw (apply-signal-arity-exception prepped-system
-                                                                   computation-stage-node
-                                                                   t)))
+
+                            ;; TODO figure out arity exceptions for cljs
+                            #?(:clj
+                               (catch ArityException t
+                                 (throw (apply-signal-arity-exception prepped-system
+                                                                      computation-stage-node
+                                                                      t))))
                             (catch #?(:clj Throwable
                                       :cljs js/Error) t
                               (throw (apply-signal-exception prepped-system

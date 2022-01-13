@@ -142,12 +142,10 @@
   (let [schema (m/schema int?)]
     (is (= #::ds{:out {:validation {:env {:http-port {:schema schema
                                                       :value  "9090"
-                                                      :errors [(miu/map->SchemaError {:path    []
-                                                                                      :in      []
-                                                                                      :schema  schema
-                                                                                      :value   "9090"
-                                                                                      :type    nil
-                                                                                      :message nil})]}}}}}
+                                                      :errors [{:path    []
+                                                                :in      []
+                                                                :schema  schema
+                                                                :value   "9090"}]}}}}}
            (-> #::ds{:base {:after-start ds/validate-with-malli}
 
                      :defs {:env {:http-port {:start  "9090"
