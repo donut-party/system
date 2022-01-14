@@ -1,7 +1,7 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require [com.rpl.specter :as sp]
-             #?(:cljs [goog.string.format :as gstrf])
+            #?(:cljs [goog.string :as gstr])
             [loom.alg :as la]
             [loom.derived :as ld]
             [loom.graph :as lg]
@@ -113,7 +113,7 @@
                "")
        keyword))
 
-(def fmt #?(:clj format :cljs gstrf/format))
+(def fmt #?(:clj format :cljs gstr/format))
 
 ;;---
 ;;; merge component defs
