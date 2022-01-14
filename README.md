@@ -10,10 +10,10 @@ that introduces *system* and *component* abstractions to:
 
 ``` clojure
 ;; deps.edn
-{club.donutpower/system {:mvn/version "0.0.101"}}
+{club.donutpower/system {:mvn/version "0.0.103"}}
 
 ;; lein
-[club.donutpower/system "0.0.101"]
+[club.donutpower/system "0.0.103"]
 
 ;; require
 [donut.system :as ds]
