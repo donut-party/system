@@ -1,14 +1,16 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
-  (:require [com.rpl.specter :as sp]
-            #?(:cljs [goog.string :as gstr])
-            [loom.alg :as la]
-            [loom.derived :as ld]
-            [loom.graph :as lg]
-            [malli.core :as m]
-            [malli.error :as me]
-            [meta-merge.core :as mm])
-  (:import #?(:clj [clojure.lang ArityException])))
+  (:require
+   [com.rpl.specter :as sp]
+   [loom.alg :as la]
+   [loom.derived :as ld]
+   [loom.graph :as lg]
+   [malli.core :as m]
+   [malli.error :as me]
+   [meta-merge.core :as mm]
+   #?(:cljs [goog.string :as gstr]))
+  (:import
+   #?(:clj [clojure.lang ArityException])))
 
 ;;---
 ;;; specs
