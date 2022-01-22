@@ -42,6 +42,7 @@ that introduces *system* and *component* abstractions to:
   - [Architecture aid](#architecture-aid)
   - [Resource management](#resource-management)
   - [Virtual environment](#virtual-environment)
+  - [Framework foundation](#framework-foundation)
 - [Objections](#objections)
 - [Alternatives](#alternatives)
 - [Acknowledgments](#acknowledgments)
@@ -788,6 +789,38 @@ The biggest benefit this brings is the ability to run dev and test systems at
 the same time. I can start a dev system with an HTTP server and a dev db
 connection from the REPL, and from the same REPL run integration tests with a
 separate HTTP server and db connection. It's a huge workflow improvement.
+
+### Framework foundation
+
+donut.system's component definitions are _just data_, which means that it's
+possible for libraries to provide components that work with donut.system without
+actually including a donut.system dependency. A library like
+[cronut](https://github.com/troy-west/cronut), for example, could include the
+following map for easy consumption in a donut.system project:
+
+``` clojure
+(def CronutComponent
+  {:start (fn [conf _ _] (initialize conf))
+   :stop  (fn [_ scheduler _] ( shutdown scheduler))})
+```
+
+What if you want to define a component group without depending on donut.system?
+You might want to do this if you have a collection of related components that
+have local refs to each other. Here's how you could do that:
+
+``` clojure
+(def CoolLibComponentGroup
+  {:component-a {:start (fn [conf _ _] ...)}
+   :component-b {:start (fn [{:keys [component-a] _ _}])
+                 :conf  {:component-a [:donut.system/ref :component-a]}}})
+```
+
+The key is that refs are represented with the vector `[:donut.system/ref
+ref-key]`.
+
+Whether or not this is actually a good idea remains to be seen, but my hope is
+that it will provide a better foundation for writing higher-level, composable
+libraries.
 
 ## Objections
 
