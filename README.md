@@ -480,8 +480,7 @@ Here's how you might print signal progress:
   {::ds/defs
    {:group {:component-a {:start       "component a"
                           :after-start print-progress}
-            :component-b {:depends-on  (ds/ref :component-a)
-                          :start       "component b"
+            :component-b {:start       "component b"
                           :after-start print-progress}}}})
 
 (ds/signal system :start)
@@ -509,14 +508,18 @@ these `:after-start` handlers:
    {:group {:component-a {:start       "component a"
                           :after-start (fn [_ _ {:keys [->info]}]
                                          (->info "component a is valid"))}
-            :component-b {:depends-on  (ds/ref :component-a)
-                          :start       "component b"
+            :component-b {:start       "component b"
                           :after-start (fn [_ _ {:keys [->validation]}]
-                                         (->validation "component b is invalid"))}
-            :component-c {:depends-on (ds/ref :component-a)
-                          :start      "component-c"
+                                         (->validation "component b is invalid"))
+                          ;; This `:conf` is only here to create the dependency
+                          ;; order for demonstration purpose
+                          :conf        {:ref (ds/ref :component-a)}}
+            :component-c {:start       "component-c"
                           :after-start (fn [_ _ _]
-                                         (prn "this won't print"))}}}})
+                                         (prn "this won't print"))
+                          ;; This `:conf` is only here to create the dependency
+                          ;; order for demonstration purpose
+                          :conf        {:ref (ds/ref :component-b)}}}}})
 
 (::ds/out (ds/signal system :start))
 ;; =>
@@ -571,16 +574,20 @@ One way you could make use of these features is to write something like this:
    {:group {:component-a {:start        "component a"
                           :schema       [:map [:foo :bar] [:baz :bux]]
                           :before-start validate-component}
-            :component-b {:depends-on   (ds/ref :component-a)
-                          :schema       [:map [:foo :bar] [:baz :bux]]
+            :component-b {:schema       [:map [:foo :bar] [:baz :bux]]
                           :start        "component b"
-                          :before-start validate-component}
-            :component-c {:depends-on   (ds/ref :component-a)
-                          :start        "component-c"
-                          :before-start validate-component}}}})
+                          :before-start validate-component
+                          ;; This `:conf` is only here to create the dependency
+                          ;; order for demonstration purpose
+                          :conf        {:ref (ds/ref :component-a)}}
+            :component-c {:start        "component-c"
+                          :before-start validate-component
+                          ;; This `:conf` is only here to create the dependency
+                          ;; order for demonstration purpose
+                          :conf        {:ref (ds/ref :component-a)}}}}})
 ```
 
-We can create a generic `validat-component` function that checks whether a
+We can create a generic `validate-component` function that checks whether a
 component's definition contains a `:schema` key, and use that to validate the
 rest of the component definition.
 
@@ -601,11 +608,9 @@ example could be rewritten like this:
    ::ds/defs
    {:group {:component-a {:start       "component a"
                           :schema      [:map [:foo :bar] [:baz :bux]]}
-            :component-b {:depends-on  (ds/ref :component-a)
-                          :schema      [:map [:foo :bar] [:baz :bux]]
+            :component-b {:schema      [:map [:foo :bar] [:baz :bux]]
                           :start       "component b"}
-            :component-c {:depends-on  (ds/ref :component-a)
-                          :start       "component-c"}}}})
+            :component-c {:start       "component-c"}}}})
 ```
 
 ### Subsystems
