@@ -525,7 +525,8 @@
 (defn- prep-system-for-apply-signal-stage
   [system component-id]
   (let [part-prepped (-> system
-                         (assoc ::component-id component-id)
+                         (assoc ::component-id component-id
+                                ::component-def (get-in system (into [::defs] component-id)))
                          (resolve-refs component-id))]
     (assoc part-prepped ::resolved-component (resolved part-prepped))))
 

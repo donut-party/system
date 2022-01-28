@@ -192,9 +192,8 @@ stack printer again:
 ```
 
 The last line includes `:stack (ds/ref [:services :stack])`. `ds/ref` is a
-function that returns a `Ref`, a little record that identifies another
-component. Components are identified with tuples of `[group-name
-component-name]`.
+function that returns a vector of the form `[:donut.system/ref component-key]`,
+where `component-key` is a vector of the form `[group-name component-name]`.
 
 These refs are used to determine the order in which signals are applied to
 components. Since the `:printer` refers to the `:stack`, we know that it depends
@@ -565,27 +564,26 @@ It's not obvious what's going on here, so let's step through it.
 One way you could make use of these features is to write something like this:
 
 ``` clojure
-(defn validate-component
-  [{:keys [schema] :as config} _ {:keys [->validation]}]
-  (when-let [errors (and schema (m/explain schema config))]
-    (->validation errors)))
+(ns donut.examples.validate
+  (:require
+   [donut.system :as ds]
+   [malli.core :as m]))
+
+(defn validate-conf
+  [conf _ {:keys [->validation ::ds/component-def]}]
+  (let [schema (:schema component-def)]
+    (when-let [errors (and schema (m/explain schema conf))]
+      (->validation errors))))
 
 (def system
   {::ds/defs
-   {:group {:component-a {:start        "component a"
-                          :schema       [:map [:foo :bar] [:baz :bux]]
-                          :before-start validate-component}
-            :component-b {:schema       [:map [:foo :bar] [:baz :bux]]
+   {:group {:component-a {:before-start validate-conf
+                          :start        "component a"
+                          :schema       [:map [:foo any?] [:baz any?]]}
+            :component-b {:before-start validate-conf
                           :start        "component b"
-                          :before-start validate-component
-                          ;; This `:conf` is only here to create the dependency
-                          ;; order for demonstration purpose
-                          :conf        {:ref (ds/ref :component-a)}}
-            :component-c {:start        "component-c"
-                          :before-start validate-component
-                          ;; This `:conf` is only here to create the dependency
-                          ;; order for demonstration purpose
-                          :conf        {:ref (ds/ref :component-a)}}}}})
+                          :schema       [:map [:foo any?] [:baz any?]]}
+            :component-c {:start "component-c"}}}})
 ```
 
 We can create a generic `validate-component` function that checks whether a
@@ -599,19 +597,25 @@ definition that will get merged with the rest of your component defs. The last
 example could be rewritten like this:
 
 ``` clojure
-(defn validate-component
-  [{:keys [schema] :as config} _ {:keys [->validation]}]
-  (when-let [errors (and schema (m/explain schema config))]
-    (->validation errors)))
+(ns donut.examples.validate
+  (:require
+   [donut.system :as ds]
+   [malli.core :as m]))
+
+(defn validate-conf
+  [conf _ {:keys [->validation ::ds/component-def]}]
+  (let [schema (:schema component-def)]
+    (when-let [errors (and schema (m/explain schema conf))]
+      (->validation errors))))
 
 (def system
-  {::ds/base {:after-start validate-component}
+  {::ds/base {:before-start validate-conf}
    ::ds/defs
-   {:group {:component-a {:start       "component a"
-                          :schema      [:map [:foo :bar] [:baz :bux]]}
-            :component-b {:schema      [:map [:foo :bar] [:baz :bux]]
-                          :start       "component b"}
-            :component-c {:start       "component-c"}}}})
+   {:group {:component-a {:start  "component a"
+                          :schema [:map [:foo any?] [:baz any?]]}
+            :component-b {:start  "component b"
+                          :schema [:map [:foo any?] [:baz any?]]}
+            :component-c {:start "component-c"}}}})
 ```
 
 ### Subsystems
