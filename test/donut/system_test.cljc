@@ -4,7 +4,6 @@
             #?(:clj [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [malli.core :as m]
-            [malli.impl.util :as miu]
             [loom.alg :as la])
   (:import [clojure.lang ExceptionInfo]))
 

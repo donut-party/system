@@ -160,7 +160,7 @@
 ;; component for signal application
 
 (defn ref-exception
-  [system referencing-component-id referenced-component-id]
+  [_system referencing-component-id referenced-component-id]
   (ex-info (fmt "Invalid ref: '%s' references undefined component '%s'"
                 referencing-component-id
                 referenced-component-id)
