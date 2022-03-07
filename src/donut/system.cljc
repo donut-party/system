@@ -758,3 +758,13 @@
 (defn stop [system] (signal system :stop))
 (defn suspend [system] (signal system :suspend))
 (defn resume [system] (signal system :resume))
+
+
+;;---
+;;; component helpers
+;;---
+
+(def required-component
+  {:start (fn [_ _ {:keys [::component-id]}]
+            (throw (ex-info "Need to define required component"
+                            {:component-id component-id})))})

@@ -327,3 +327,9 @@
     (is (ds/signal {::ds/defs {:group {:component "constant"}}
                     ::ds/signals (merge ds/default-signals {:foo {:order :topsort}})}
                    :foo))))
+
+(deftest required-component
+  (is (thrown?
+       ExceptionInfo
+       (ds/signal {::ds/defs {:group {:component ds/required-component}}}
+                  :start))))
