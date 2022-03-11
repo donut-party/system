@@ -1,14 +1,12 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require
-   [clojure.walk :as walk]
    [com.rpl.specter :as sp]
    [loom.alg :as la]
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
    [malli.error :as me]
-   [meta-merge.core :as mm]
    #?(:cljs [goog.string :as gstr]))
   (:import
    #?(:clj [clojure.lang ArityException])))
@@ -146,6 +144,7 @@
                        (keys components)))
              #{}
              defs))
+
 (defn def-merge
   [left right]
   (if (and (map? left) (map? right))
@@ -611,8 +610,8 @@
 
 (defn init-system
   [maybe-system signal-name component-keys]
-  (-> (mm/meta-merge {::signals default-signals}
-                     maybe-system)
+  (-> maybe-system
+      (update ::signals #(merge default-signals %))
       merge-base
       (set-component-keys signal-name component-keys)
       (assoc ::last-signal signal-name)
@@ -640,13 +639,6 @@
         (init-signal-computation-graph signal-name)
         (apply-signal-computation-graph)
         (clean-after-signal-apply))))
-
-(defn system-merge
-  [& systems]
-  (reduce (fn [system subsystem]
-            (mm/meta-merge system subsystem))
-          {}
-          systems))
 
 (defn validate-with-malli
   "helper function for validating component instances with malli if a schema is
@@ -754,13 +746,26 @@
   of the donut ecosystem."
   identity)
 
+(def system-merge-fns
+  {::base merge
+   ::defs merge-defs})
+
+;; TODO spec keys for custom-config
+
+(defn merge-system-config
+  [base-config custom-config]
+  (reduce-kv (fn [system k merge-fn]
+               (update system k merge-fn (k custom-config)))
+             base-config
+             system-merge-fns))
+
 (defn system-config
   ([sconf]
    (cond (system? sconf)  sconf
          (keyword? sconf) (config sconf)))
   ([sconf custom-config]
    (let [cfg (system-config sconf)]
-     (cond (map? custom-config) (mm/meta-merge cfg custom-config)
+     (cond (map? custom-config) (merge-system-config cfg custom-config)
            (fn? custom-config)  (custom-config cfg)
            (not custom-config)  cfg
            :else                (throw (ex-info "custom config must be a map or function"

@@ -124,18 +124,6 @@
                (ds/signal :start)
                (select-keys [::ds/instances]))))))
 
-(deftest system-merge-test
-  (let [handlers {:start (fn [{:keys [port]} _ _]
-                           port)}]
-    (is (= #::ds{:defs {:env {:http-port {:start 9090}}
-                        :app {:http-server [{:port (ds/ref [:env :http-port])}
-                                            handlers]}}}
-           (-> (ds/system-merge
-                #::ds{:defs {:app {:http-server [{:port (ds/ref [:env :http-port])}
-                                                 handlers]}}}
-                #::ds{:defs {:env {:http-port {:start 9090}}}})
-               (select-keys [::ds/defs]))))))
-
 (deftest validate-component
   (let [schema (m/schema int?)]
     (is (= #::ds{:out {:validation {:env {:http-port {:schema schema
