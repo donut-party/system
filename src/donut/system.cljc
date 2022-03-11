@@ -1,6 +1,7 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require
+   [clojure.walk :as walk]
    [com.rpl.specter :as sp]
    [loom.alg :as la]
    [loom.derived :as ld]
@@ -136,22 +137,41 @@
 ;;; merge component defs
 ;;---
 
-(defn merge-def
-  "merges defs, coercing constants to maps"
-  [d1 d2]
-  (let [d1 (if (map? d1) d1 {::constant d1})
-        d2 (if (map? d2) d2 {::constant d2})]
-    (mm/meta-merge d1 d2)))
+(defn component-paths
+  [defs]
+  (reduce-kv (fn [ps group-name components]
+               (reduce (fn [ps component-name]
+                         (conj ps [group-name component-name]))
+                       ps
+                       (keys components)))
+             #{}
+             defs))
+(defn def-merge
+  [left right]
+  (if (and (map? left) (map? right))
+    (merge left right)
+    right))
+
+(defn merge-defs
+  [s1 s2 & [merge-fn]]
+  (let [merge-fn (or merge-fn def-merge)]
+    (reduce (fn [system path] (update-in system path merge-fn (get-in s2 path)))
+            s1
+            (into (component-paths s1)
+                  (component-paths s2)))))
+
+(defn base-merge
+  [component-def base]
+  (cond (and (map? base) (map? component-def)) (merge base component-def)
+        (map? base)                            (merge base {:start component-def})
+        :else                                  (or base component-def)))
 
 (defn- merge-base
   "::base gives you a way to apply default config options to all components"
-  [{:keys [::base] :as system}]
-  (if base
-    (sp/transform [(sp/walker ::defs) ::defs sp/MAP-VALS sp/MAP-VALS]
-                  (fn [component-def]
-                    (merge-def base component-def))
-                  system)
-    system))
+  [{:keys [::base ::defs] :as system}]
+  (assoc system ::defs (reduce (fn [system path] (update-in system path base-merge base))
+                               defs
+                               (component-paths defs))))
 
 ;;---
 ;;; ref resolution
@@ -497,9 +517,8 @@
 
                                     (map? maybe-signal-constant)
                                     (or (sp/select-one [::resolved computation-stage-node] system)
-                                        (sp/select-one [::resolved component-id ::constant] system)
                                         (when-let [generic-handler (sp/select-one [::resolved component-id ::mk-signal-handler]
-                                                                                system)]
+                                                                                  system)]
                                           (generic-handler (last computation-stage-node)))
                                         system-identity)
 

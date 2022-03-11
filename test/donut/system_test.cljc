@@ -7,13 +7,12 @@
             [loom.alg :as la])
   (:import [clojure.lang ExceptionInfo]))
 
-(deftest merge-def-test
-  (is (= {::ds/constant :foo}
-         (ds/merge-def {} :foo)))
-
-  (testing "coercion to map with ::ds/constant key"
-    (is (= {::ds/constant :foo}
-           (ds/merge-def :foo {})))))
+(deftest merge-defs-test
+  (is (= {:group {:a {:start :b
+                      :stop :c}}}
+         (ds/merge-defs {:group {:a {:start :a
+                                     :stop  :c}}}
+                        {:group {:a {:start :b}}}))))
 
 (deftest merge-base-test
   (is (= #::ds{:base {:before-start [:foo]}
@@ -22,11 +21,11 @@
          (#'ds/merge-base #::ds{:base {:before-start [:foo]}
                                 :defs {:app {:http-server {:after-start [:bar]}}}})))
 
-  (is (= #::ds{:base :foo
-               :defs {:app {:http-server {:after-start  [:bar]
-                                          ::ds/constant :foo}}}}
-         (#'ds/merge-base #::ds{:base :foo
-                                :defs {:app {:http-server {:after-start [:bar]}}}}))))
+  (is (= #::ds{:base {:before-start [:foo]}
+               :defs {:app {:http-server {:before-start [:foo]
+                                          :start        [:bar]}}}}
+         (#'ds/merge-base #::ds{:base {:before-start [:foo]}
+                                :defs {:app {:http-server [:bar]}}}))))
 
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
