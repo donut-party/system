@@ -6,10 +6,7 @@
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
-   [malli.error :as me]
-   #?(:cljs [goog.string :as gstr]))
-  (:import
-   #?(:clj [clojure.lang ArityException])))
+   [malli.error :as me]))
 
 ;;---
 ;;; specs
@@ -129,8 +126,6 @@
                "")
        keyword))
 
-(def fmt #?(:clj format :cljs gstr/format))
-
 ;;---
 ;;; merge component defs
 ;;---
@@ -180,9 +175,8 @@
 
 (defn ref-exception
   [_system referencing-component-id referenced-component-id]
-  (ex-info (fmt "Invalid ref: '%s' references undefined component '%s'"
-                referencing-component-id
-                referenced-component-id)
+  (ex-info (str "Invalid ref: '" referencing-component-id "' "
+                "references undefined component '" referenced-component-id "'")
            {:referencing-component-id referencing-component-id
             :referenced-component-id  referenced-component-id}))
 
@@ -195,9 +189,8 @@
 
 (defn group-ref-exception
   [_system referencing-component-id referenced-component-group-name]
-  (ex-info (fmt "Invalid group ref: '%s' references empty component group '%s'"
-                referencing-component-id
-                referenced-component-group-name)
+  (ex-info (str "Invalid group ref: '" referencing-component-id "' "
+                "references empty component group '" referenced-component-group-name "'")
            {:referencing-component-id        referencing-component-id
             :referenced-component-group-name referenced-component-group-name}))
 
@@ -360,17 +353,6 @@
 (defn- apply-signal-exception
   [system computation-stage t]
   (ex-info (str "Error on " computation-stage " when applying signal")
-           {:reason   ::apply-signal-exception
-            :stage    computation-stage
-            :resolved (sp/select-one [::resolved (take 2 computation-stage)]
-                                     system)
-            :instance (sp/select-one [::instances (take 2 computation-stage)]
-                                     system)}
-           t))
-
-(defn- apply-signal-arity-exception
-  [system computation-stage t]
-  (ex-info (str "Signal handler for " computation-stage " should take 3 arguments")
            {:reason   ::apply-signal-exception
             :stage    computation-stage
             :resolved (sp/select-one [::resolved (take 2 computation-stage)]
@@ -555,12 +537,6 @@
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
                              prepped-system)
 
-                            ;; TODO figure out arity exceptions for cljs
-                            #?(:clj
-                               (catch ArityException t
-                                 (throw (apply-signal-arity-exception prepped-system
-                                                                      computation-stage-node
-                                                                      t))))
                             (catch #?(:clj Throwable
                                       :cljs js/Error) t
                               (throw (apply-signal-exception prepped-system
