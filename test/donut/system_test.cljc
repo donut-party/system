@@ -151,12 +151,12 @@
                                                   :conf  {:port (ds/ref [:env :http-port])}}}}}]
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:before-start (constantly nil)}}}})
+                (assoc-in [::ds/defs :app :http/server :before-start] (constantly nil))
                 (ds/signal :start)
                 (select-keys [::ds/instances]))))
     (is (= expected
            (->  system
-                (ds/system-merge #::ds{:defs {:app {:http-server {:after-start (constantly nil)}}}})
+                (assoc-in [::ds/defs :app :http/server :after-start] (constantly nil))
                 (ds/signal :start)
                 (select-keys [::ds/instances]))))))
 
