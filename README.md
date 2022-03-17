@@ -13,7 +13,7 @@ that introduces *system* and *component* abstractions to:
 {club.donutpower/system {:mvn/version "0.0.118"}}
 
 ;; lein
-[club.donutpower/system "0.0.112"]
+[club.donutpower/system "0.0.118"]
 
 ;; require
 [donut.system :as ds]
