@@ -608,7 +608,7 @@
   (let [inited-system (init-system system signal-name component-keys)]
     (when-let [explanation (m/explain (into [:enum] (sp/select [::signals sp/MAP-KEYS] inited-system))
                                       signal-name)]
-      (throw (ex-info (str "Signal " signal-name " not recognized")
+      (throw (ex-info (str "Signal " signal-name " is not recognized. Add it to ::ds/signals")
                       {:reason             :signal-not-recognized
                        :spec-explain-human (me/humanize explanation)})))
     (-> inited-system
@@ -717,9 +717,8 @@
   [m]
   {:start m})
 
-(defmulti config
-  "A way to name different configs, e.g. :test, :dev, :prod, etc. Used by the rest
-  of the donut ecosystem."
+(defmulti named-system
+  "A way to name different system, e.g. :test, :dev, :prod, etc."
   identity)
 
 (def system-merge-fns
@@ -735,25 +734,35 @@
              base-config
              system-merge-fns))
 
-(defn system-config
+(defn assoc-many
+  ([m assocs]
+   (reduce-kv (fn [m path val] (assoc-in m path val))
+              m
+              assocs))
+  ([m prefix assocs]
+   (update-in m prefix assoc-many assocs)))
+
+(defn system
+  "specify a system or a system named registered with `config`, and optionally
+  provide overrides"
   ([sconf]
    (cond (system? sconf)  sconf
-         (keyword? sconf) (config sconf)))
-  ([sconf custom-config]
-   (let [cfg (system-config sconf)]
-     (cond (map? custom-config) (merge-system-config cfg custom-config)
-           (fn? custom-config)  (custom-config cfg)
-           (not custom-config)  cfg
-           :else                (throw (ex-info "custom config must be a map or function"
-                                                {:custom-config custom-config}))))))
+         (keyword? sconf) (named-system sconf)))
+  ([sconf component-def-overrides]
+   (let [system (system sconf)]
+     (cond (map? component-def-overrides) (assoc-many system [::defs] component-def-overrides)
+           (fn? component-def-overrides)  (component-def-overrides system)
+           (not component-def-overrides)  system
+           :else                          (throw (ex-info "component def overrides must be a map or function"
+                                                          {:custom-config component-def-overrides}))))))
 
 (defn start
   ([config-name]
-   (signal (system-config config-name) :start))
+   (signal (system config-name) :start))
   ([config-name custom-config]
-   (signal (system-config config-name custom-config) :start))
+   (signal (system config-name custom-config) :start))
   ([config-name custom-config component-ids]
-   (signal (system-config config-name custom-config) :start component-ids)))
+   (signal (system config-name custom-config) :start component-ids)))
 
 (defn stop [system] (signal system :stop))
 (defn suspend [system] (signal system :suspend))

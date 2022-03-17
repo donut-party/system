@@ -289,24 +289,59 @@
        (ds/signal {::ds/defs {:group {:component {:start (fn [])}}}}
                   :start))))
 
-(deftest signal-helper-test
-  (is (= {::ds/instances {:app {:boop "boop"}}}
-         (-> {::ds/defs {:app {:boop {:start "boop"}}}}
-             (ds/start)
-             (select-keys [::ds/instances]))))
+(defmethod ds/named-system ::system-config-test
+  [_]
+  {::ds/defs {:group {:component-a 1
+                      :component-b 2
+                      :component-c 3}}})
 
-  (is (= {::ds/instances {:app {:boop "boop and boop again"}}}
-         (-> {::ds/defs {:app {:boop {:start "boop"
-                                      :stop (fn [_ instance _]
-                                              (str instance " and boop again"))}}}}
-             (ds/start)
-             (ds/stop)
+(deftest assoc-many-test
+  (is (= {:a {:b 1}
+          :c {:d 2}}
+         (ds/assoc-many {} {[:a :b] 1
+                            [:c :d] 2})))
+
+  (is (= {:foo {:a {:b 1}
+                :c {:d 2}}}
+         (ds/assoc-many {}
+                        [:foo]
+                        {[:a :b] 1
+                         [:c :d] 2}))))
+
+(deftest system-config-test
+  (is (= {::ds/defs {:group {:component-a 1
+                             :component-b 2
+                             :component-c 4
+                             :component-d 5}}}
+         (ds/system ::system-config-test
+           {[:group :component-c] 4
+            [:group :component-d] 5}))))
+
+(deftest signal-helper-test
+  (testing "basic signal helpers work"
+    (is (= {::ds/instances {:app {:boop "boop"}}}
+           (-> {::ds/defs {:app {:boop {:start "boop"}}}}
+               (ds/start)
+               (select-keys [::ds/instances]))))
+
+    (is (= {::ds/instances {:app {:boop "boop and boop again"}}}
+           (-> {::ds/defs {:app {:boop {:start "boop"
+                                        :stop (fn [_ instance _]
+                                                (str instance " and boop again"))}}}}
+               (ds/start)
+               (ds/stop)
+               (select-keys [::ds/instances]))))))
+
+(deftest signal-helper-overrides-test
+  (is (= {::ds/instances {:app {:boop "boop"}}}
+         (-> {::ds/defs {:app {:boop {:start "no boop"}}}}
+             (ds/start {[:app :boop :start] "boop"})
              (select-keys [::ds/instances])))))
 
 (deftest recognized-signals-exception-test
   (is (thrown-with-msg?
        ExceptionInfo
-       #"Signal :foo not recognized"
+       #"Signal :foo is not recognized"
        (ds/signal {::ds/defs {:group {:component "constant"}}}
                   :foo)))
 

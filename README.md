@@ -683,21 +683,35 @@ the parent system's component `[:services :stack]`.
 
 ### Config helpers
 
-`donut.system/config` is a multimethod you can use to register system configs.
-This can be useful for defining dev, test, and prod systems:
+`donut.system/named-system` is a multimethod you can use to register system
+maps. This can be useful for defining dev, test, and prod systems:
 
 ``` clojure
-(defmethod ds/config :test
+(defmethod ds/named-system :test
   [_]
   {::ds/defs ...})
 ```
 
 Often you'll want to customize a config; you'll want to replace a component with
-a mock, for example. You can use the function `ds/system-config` to merge a
-registered system conf with overrides:
+a mock, for example. You can use the function `ds/system` to merge a registered
+system map with overrides:
 
 ``` clojure
-(ds/system-config :test {::ds/defs {:services {:queue mock-queue}}})
+(ds/system :test {[:services :queue] mock-queue})
+```
+
+Overrides are a map where keys are _def paths_, and values are whatever value
+you want to be assoc'd in to that path under `::ds/defs`. The above code is
+equivalent to this:
+
+``` clojure
+(update (ds/named-system :test)
+        ::ds/defs
+        (fn [defs]
+          (reduce-kv (fn [new-defs path val]
+                       (assoc-in new-defs path val))
+                     defs
+                     {[:services :queue] mock-queue})))
 ```
 
 The signal helpers `ds/start`, `ds/stop`, `ds/suspend`, and `ds/resume` can take
@@ -708,15 +722,14 @@ either a system name or a system map, and can take optional overrides:
 (ds/start {::ds/defs ...}) ;; <- system map
 
 ;; use named system, with overrides
-(ds/start :test 
-          {::ds/defs {:services {:queue mock-queue}}})
+(ds/start :test {[:services :queue] mock-queue})
 ```
 
 The `start` helper also takes an optional third argument to select components:
 
 ``` clojure
 (ds/start :test 
-          {::ds/defs {:services {:queue mock-queue}}}
+          {[:services :queue] mock-queue}
           #{[:app :http-server]} ;; <- component selection
           )
 ```
@@ -811,7 +824,7 @@ following map for easy consumption in a donut.system project:
 ``` clojure
 (def CronutComponent
   {:start (fn [conf _ _] (initialize conf))
-   :stop  (fn [_ scheduler _] ( shutdown scheduler))})
+   :stop  (fn [_ scheduler _] (shutdown scheduler))})
 ```
 
 What if you want to define a component group without depending on donut.system?
@@ -970,8 +983,6 @@ interesting and want to try it out so that we can work out kinks and improve it.
 
 ## TODO
 
-- REPL tools
 - async signal handling
 - more examples
-- more consistent naming
 - discuss the value of dependency injection
