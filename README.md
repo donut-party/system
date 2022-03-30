@@ -865,110 +865,13 @@ Other Clojure libraries in the same space:
 
 ## Why Use This and Not That?
 
-The Clojure ecosystem already has a number of useful component libraries. Why
-should you use donut.system and not one of the libraries listed above? I'll
-focus on Integrant, as this library was built to address some of the issues I
-encountered with it. Before proceeding: Integrant has overall served me well for
-years, and I'm very grateful to weavejester for creating it and for introducing
-me to a new way of thinking about managing systems.
+I cover how donut.system compares to the alternatives in [docs/rationale.org](docs/rationale.org).
 
-The problems I've run into with Integrant include:
-
-- Defining alternative implementations
-- Composing systems
-- Creating multiple instances of groups of components
-
-### Defining alternative implementations 
-
-There's no canonical, straightforward way to define test instances of components
-in Integrant. The two main options are:
-
-1. Paramaterize component init
-2. Use keyword hierarchies
-
-Both approaches rely on a level of indirection that can make the code harder to
-undersand, and they're both resistant to ad-hoc usage. Let's briefly look at
-each approach, and then look at how to do this in donut.system.
-
-#### Paramaterizing component init
-
-Here's one way you could parameterize component initialization:
-
-``` clojure
-(defmethod ig/init-key ::component [_ {:keys [test?]}]
-  (if test?
-    test-config
-    main-config))
-
-(def default-system-config
-  {::component {:test? false}})
-
-;; in a test
-(assoc-in default-system-config [::component :test?] true)
-```
-
-Your `system-config` configures `::component` with a flag indicating which
-implementation to use. There are a few problems with this approach:
-
-- It's up to you to apply it consistently.
-- You must define all possible implementations up front. This is a problem if
-  you want to e.g. mock out a component to reify a protocol such that it returns
-  values that are only relevant for a specific test.
-- There must always be distance between the context where the alternative
-  implementation is defined (in the `ig/init-key` method definition) and the
-  context where you're specifying that you want an alternative implementation;
-  you define your test implementation and your test in separate places,
-  increasing cognitive load.
-
-#### Use keyword hierarchies
-
-Here's how you could use keyword hierarchies to define alternative component
-implementations:
-
-``` clojure
-(derive ::component-impl-a ::component)
-(derive ::component-impl-b ::component)
-
-(defmethod ig/init-key ::component-impl-a [_ _])
-(defmethod ig/init-key ::component-impl-b [_ _])
-
-(def default-system-config
-  {::component-impl-a {}})
-
-;; create test config
-(-> default-system-config
-    (dissoc ::component-impl-a)
-    (assoc ::component-impl-b {}))
-```
-
-Note that you have to be sure to `dissoc` the component `::component-impl-a`.
-Specifying an alternative implementation is not simply specifying what you
-_want_, it also requires to you remove what you _don't want_.
-
-#### Alternative implementations in donut.system
-
-Here's how you provide an alternative implementation in donut.system:
-
-``` clojure
-(defn start-a [_ _ _])
-(defn start-b [_ _ _])
-
-(def default-system-config
-  {::ds/defs {:component-group {:component {:start start-a}}}})
-
-;; create test config
-(assoc-in default-system-config [::ds/defs :component-group :component :start] start-b)
-```
-
-In this case you are just directly updating a map to specify the new behavior
-you want. You don't even have to define `start-b` separately; you could pass in
-an anonymous function.
-
-### Composing systems
+## Composing systems
 
 TODO
 
-### Creating multiple instances of groups of components
+## Creating multiple instances of groups of components
 
 TODO
 

@@ -1,0 +1,133 @@
+* Why should you use donut.system?
+
+It seems like you no matter where you go, people can't stop talking about donut.system. "Have you tried the newest Clojure dependency injection library?" they ask you, their eyes shining with manic anticipation. You're curious, intrigued: is donut.system right for you?
+
+We'll look at this from two perspectives:
+
+- Why you should use a dependency injection library at all
+- How donut.system is designed for ease and clarity across myriad tasks
+
+This doc assumes you've read the [[https://github.com/donut-power/system#purpose][donut.system README]] and understand how to use the library.
+
+A couple notes before we begin:
+- in this doc I do something I'm usually loathe to do: I criticize other libraries. I've done this because I've gotten multiple requests to clarify how donut.system compares to existing tools, and ultimately think it serves the community to be clear about how this lib might improve upon existing designs
+- this doc isn't particularly well written. Sorry!
+
+
+** Why you should use a dependency injection library at all
+
+[[https://github.com/stuartsierra/component#introduction][The Introduction in Stuart Sierra's component library]] does a good job of explaining why you might want to use this kind of tool in the first place. The [[https://github.com/donut-power/system#purpose][donut.system README]] also discusses this.
+
+** How donut.system is designed for ease and clarity across myriad tasks
+
+I've tried to design donut.system so that it's easy to understand what it's doing and easy to write code for it across a diversity of tasks:
+
+- Defining a component
+- Defining a system
+- Overriding components for tests
+- Debugging failures
+- Implementing custom behavior
+- Creating component libraries
+
+In general, I want to minimize cognitive load. I want the developer to have to learn as little as possible to get started with donut.system. I also minimize the number of rules and concepts the devloper needs to keep in mind in order to understand and write code for donut.system.
+
+*** Defined using plain maps and functions
+
+donut.system itself introduces its own rules and concepts for defining groups and components, and for applying signals. In order to not introduce more cognitive load, I've tried to use only the minimum Clojure constructs needed to implement these rules and concepts, and to use constructs that every Clojurian will understand, regardless of their experience level. I've especially tried to avoid layering extra semantics onto infrequently used constructs.
+
+The result is that the components are defined using just maps and functions:
+
+#+begin_src clojure
+{:donut.system/defs
+ {:application
+  {:http-server
+   {:start (fn [conf _ _] (start-server conf))
+    :stop  (fn [_ server _] (.stop server))
+    :conf  {:port 8080}}}}}
+#+end_src
+
+Maps and functions are as basic as it gets in Clojure, and they're easy to reason about. For instance, this design makes the relationship between system map and system behavior straightforward. There is a direct, inspectable relationship between the component definitions found under the ~donut.system/defs~ key and the behavior that component instances produce in response to signals. The function under a component's ~:start~ key is used to handle the ~:start~ signal. There are no additional protocol resolutions, multimethod lookups, or data-as-code interpretations. You don't have to mentally perform those operations to understand what the system will do.
+
+Relying just on maps and functions make it easier to modify the system. If you want to modify a component defition -- to provide a test mock, for example -- then all you need to do ~assoc-in~ on the system map.
+
+Let's compare this to alternative libraries.
+
+*Component*
+
+With the component library, you implement the ~component/Lifecycle~ protocol to define component behavior. You do this through one of three methods:
+
+- Defining a record that implements the ~component/Lifecycle~ protocol
+- Using ~reify~ on an object
+- Extending an object to implement the protocol [[https://clojure.org/reference/protocols#_extend_via_metadata][via metadata]].
+
+All of this is fine, but I don't think it's actually necessary to require the developer to use these additional language facilities, and I think it's easier to reason about maps and functions than protocols and their implementation mechanisms.
+
+Additionally, beginners often avoid protocols, sometimes for years (I know I did!). I want beginners to be able to benefit from using this kind of dependency injection library without having to learn more daunting parts of Clojure if at all possible, especially if those parts aren't inherently necessary.
+
+*Integrant*
+
+With Integrant, you define system behavior using multimethods, keyword hierarchies, and composite keys.
+
+Integrant's usage of keyword hierarchies syntax introduces extra cognitive load because it relies on a language mechanism (keyword hierarchies) that is rarely used elsewhere. It takes this one step further by introducing "composite keys", its own idiosyncratic mechanism for quasi-extending the concept of keyword hierarchies to allow anonymous usage:
+
+#+begin_src clojure
+(def ig-config-two-servers-composite-keys
+ {[::server ::example-1]            {:options {:join? false}
+                                     :handler (ig/ref [::handler ::example-1])}
+  [::handler ::example-1]           {:message "handler 1"}
+  [::network-discovery ::example-1] {:server (ig/ref [::server :example-1])}
+
+  [::server ::example-2]            {:options {:join? false}
+                                     :handler (ig/ref [::handler ::example-2])}
+  [::handler ::example-2]           {:message "handler 2"}
+  [::network-discovery ::example-2] {:server (ig/ref [::server :example-2])}
+  })
+#+end_src
+
+In this snippet, composite keys like ~[::server ::example-1]~ and ~[::handler ::example-1]~ instead of using ~(derive ::example-1 ::server)~ and ~(derive ::example-1 ::handler)~. Actually, as I write this out, I have a number of questions that reflect the difficulty of working with this approach:
+
+- Why is the composite key order the reverse of derive's argument order? Am I doing this right?
+- Is it actually valid to include both ~[::server ::example-1]~ and ~[::handler ::example-1]~? If I were to write the following, it would surely be invalid:
+
+  #+BEGIN_SRC clojure
+(derive ::example-1 ::server)
+(derive ::example-1 ::handler)
+(def ig-config
+  {::example-1 {}})
+  #+END_SRC
+
+How would integrant know whether to treat ~::example-1~ as a ~::server~ or as a ~::handler~?
+
+Aditionally, there's no canonical, straightforward way to define test instances of components in Integrant. The two main options are:
+
+1. Paramaterize component init
+2. Use keyword hierarchies
+
+Both approaches rely on a level of indirection that can make the code harder to undersand, and they're both resistant to ad-hoc usage.
+
+All of this introduces extra rules and concepts that ultimately aren't solving an essential problem.
+
+*Clip*
+
+I like how Clip defines components using maps with ~:start~ and ~:stop~ keys (that may even be wear I got the idea from? I don't remember). However, I think the decision to use code-as-data to encode behavior makes it harder than necessary to work with. Clip additionally introduces the concept of an "implicit target" and includes a table that you can use to then reason about the implicit target.
+
+*** Helpers
+
+donut.system's helpers let you provide overrides proximate to where they're used. For example, in a test you could have:
+
+#+BEGIN_SRC clojure
+(deftest some-test
+  (let [system (ds/start :test {[:group-a :component-a :start] (fn mock-component-a [conf _ _])})]
+    ;; do stuff with system in stest
+    ))
+#+END_SRC
+
+Here, you're overriding the ~:start~ signal handler for the component ~[:group-a :component-a]~. You're specifying the override directly in the context that it's needed, the test, which makes the test easier to understand.
+
+*** Signals are open
+
+donut.system's design makes it possible for you to define your own custom signals, if you want. You might want to have a ~:heartbeat~ signal, for example. I don't know what you might want to do with this feature, but that's the point: it's an extension point that allows for uses that I haven't foreseen.
+
+** How donut.system fits into a broader vision for a Clojure framework
+
+Another possible reason to use donut.system is that it's intended to be a foundation for a Clojure framework, donut.
