@@ -543,12 +543,12 @@ first-class support for groups.
 You can select parts of a system to send a signal to:
 
 ``` clojure
-(let [running-system (ds/signal system :start #{[:group-1 :component-1]
-                                                [:group-1 :component-2]})]
+(let [running-system (ds/signal system :start nil #{[:group-1 :component-1]
+                                                    [:group-1 :component-2]})]
   (ds/signal running-system :stop))
 ```
 
-First, we call `ds/start` and pass it an optional second argument, a set of
+First, we call `ds/start` and pass it an optional third argument, a set of
 _selected components_ This will filter out all components that aren't
 descendants of `[:group-1 :component-1]` or `[:group-2 :component-2]` and send
 the `:start` signal only to them.
@@ -561,7 +561,7 @@ You can also select component groups by using just the group's name for your
 selection, like so:
 
 ``` clojure
-(ds/signal system :start #{:group-1})
+(ds/signal system :start nil #{:group-1})
 ```
 
 ### Stages
