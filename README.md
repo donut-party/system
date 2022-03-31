@@ -321,7 +321,86 @@ map" approach. In the mean time, [this Lambda Island blog post on Coffee
 Grinders](https://lambdaisland.com/blog/2020-03-29-coffee-grinders-2) does a
 good job of explaining it.
 
-## Advanced Usage
+### Config helpers
+
+`donut.system/named-system` is a multimethod you can use to register system
+maps. This can be useful for defining dev, test, and prod systems:
+
+``` clojure
+(defmethod ds/named-system :test
+  [_]
+  {::ds/defs ...})
+```
+
+Often you'll want to customize a config; you'll want to replace a component with
+a mock, for example. You can pass an additional argument to `ds/system` to
+specify overrides:
+
+``` clojure
+(ds/system :test {[:services :queue] mock-queue})
+```
+
+You don't have to override an entire component. You can also override just a
+signal handler:
+
+``` clojure
+(ds/system :test {[:services :queue :start] (fn mock-start-queue [conf _ _])})
+```
+
+Overrides are a map where keys are _def paths_, and values are whatever value
+you want to be assoc'd in to that path under `::ds/defs`. The above code is
+equivalent to this:
+
+``` clojure
+(update (ds/named-system :test)
+        ::ds/defs
+        (fn [defs]
+          (reduce-kv (fn [new-defs path val]
+                       (assoc-in new-defs path val))
+                     defs
+                     {[:services :queue :start] (fn mock-start-queue [conf _ _])})))
+```
+
+The signal helpers `ds/start`, `ds/stop`, `ds/suspend`, and `ds/resume` can take
+either a system name or a system map, and can take optional overrides:
+
+``` clojure
+(ds/start :test) ;; <- system name
+(ds/start {::ds/defs ...}) ;; <- system map
+
+;; use named system, with overrides
+(ds/start :test {[:services :queue] mock-queue})
+```
+
+The `start` helper also takes an optional third argument to select components:
+
+``` clojure
+(ds/start :test 
+          {[:services :queue] mock-queue}
+          #{[:app :http-server]} ;; <- component selection
+          )
+```
+
+### Reloaded REPL workflow
+
+The `donut.system.repl` has conveniences for REPL workflows. To take advantage
+of it, first create a named-config with the name `:donut.system/repl`:
+
+``` clojure
+(defmethod ds/named-system :donut.system/repl
+  [_]
+  {::ds/defs {}})
+```
+
+Calling `donut.system.repl/start` will start this system.
+`donut.system.repl/stop` will stop it. `donut.system.repl/restart` will:
+
+1. Stop the running system
+2. Call `(clojure.tools.namespace.repl/refresh :after 'donut.system.repl/start)`
+
+This will reload any changed files and then start your system again.
+
+## Advanced usage
 
 The topics covered so far should let you get started defining components and
 systems in your own projects. donut.system can also handle more complex use
@@ -680,60 +759,6 @@ for forwarding all other signals to the subsystem.
 `ds/subsystem-component` takes an optional second argument, a set of refs that
 should be imported into the subsystem. This is how the subsystems can reference
 the parent system's component `[:services :stack]`.
-
-### Config helpers
-
-`donut.system/named-system` is a multimethod you can use to register system
-maps. This can be useful for defining dev, test, and prod systems:
-
-``` clojure
-(defmethod ds/named-system :test
-  [_]
-  {::ds/defs ...})
-```
-
-Often you'll want to customize a config; you'll want to replace a component with
-a mock, for example. You can use the function `ds/system` to merge a registered
-system map with overrides:
-
-``` clojure
-(ds/system :test {[:services :queue] mock-queue})
-```
-
-Overrides are a map where keys are _def paths_, and values are whatever value
-you want to be assoc'd in to that path under `::ds/defs`. The above code is
-equivalent to this:
-
-``` clojure
-(update (ds/named-system :test)
-        ::ds/defs
-        (fn [defs]
-          (reduce-kv (fn [new-defs path val]
-                       (assoc-in new-defs path val))
-                     defs
-                     {[:services :queue] mock-queue})))
-```
-
-The signal helpers `ds/start`, `ds/stop`, `ds/suspend`, and `ds/resume` can take
-either a system name or a system map, and can take optional overrides:
-
-``` clojure
-(ds/start :test) ;; <- system name
-(ds/start {::ds/defs ...}) ;; <- system map
-
-;; use named system, with overrides
-(ds/start :test {[:services :queue] mock-queue})
-```
-
-The `start` helper also takes an optional third argument to select components:
-
-``` clojure
-(ds/start :test 
-          {[:services :queue] mock-queue}
-          #{[:app :http-server]} ;; <- component selection
-          )
-```
-
 
 ## Purpose
 
