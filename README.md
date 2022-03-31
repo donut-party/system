@@ -26,18 +26,18 @@ that introduces *system* and *component* abstractions to:
 - [Basic Usage](#basic-usage)
   - [Components](#components)
   - [Refs](#refs)
-  - [Constant Instances](#constant-instances)
+  - [Constant instances](#constant-instances)
   - [Signals](#signals)
-  - [Custom Signals](#custom-signals)
+  - [Custom signals](#custom-signals)
   - [Systems](#systems)
   - [Config helpers](#config-helpers)
   - [Reloaded REPL workflow](#reloaded-repl-workflow)
-  - [Organization and Configuration](#organization-and-configuration)
+  - [Organization and configuration](#organization-and-configuration)
 - [Advanced usage](#advanced-usage)
   - [Groups and local refs](#groups-and-local-refs)
   - [Selecting components](#selecting-components)
   - [Stages](#stages)
-  - [Before, After, Validation, and "Channels"](#before-after-validation-and-channels)
+  - [Before, after, validation, and "channels"](#before-after-validation-and-channels)
   - [::ds/base](#dsbase)
   - [Subsystems](#subsystems)
 - [Purpose](#purpose)
@@ -47,7 +47,7 @@ that introduces *system* and *component* abstractions to:
   - [Framework foundation](#framework-foundation)
 - [Objections](#objections)
 - [Alternatives](#alternatives)
-- [Why Use This and Not That?](#why-use-this-and-not-that)
+- [Why use this and not that?](#why-use-this-and-not-that)
 - [Composing systems](#composing-systems)
 - [Creating multiple instances of groups of components](#creating-multiple-instances-of-groups-of-components)
 - [Acknowledgments](#acknowledgments)
@@ -208,7 +208,7 @@ The `:printer` component's `:start` signal handle destructures `stack` from its
 first argument. Its value is the `:stack` component's instance, the atom that
 gets created by `:stack`'s `:start` signal handler.
 
-### Constant Instances
+### Constant instances
 
 Component defs don't have to be maps. If you use a non-map value, that value is
 considered to be the component's instance. This can be useful for configuration.
@@ -267,7 +267,7 @@ it would be an implementation detail that should be transparent to you.
 donut.system provides some sugar for built-in signals: instead of calling
 `(ds/signal system :start)` you can call `(ds/start system)`.
 
-### Custom Signals
+### Custom signals
 
 There's a more interesting reason for the use of _signal_, though: I want signal
 handling to be extensible. Other component libraries use the term _lifecycle_,
@@ -404,7 +404,7 @@ Calling `donut.system.repl/start` will start this system.
 
 This will reload any changed files and then start your system again.
 
-### Organization and Configuration
+### Organization and configuration
 
 Where do you actually put your donut.system-related code? Relatedly, how do you
 handle configuration?
@@ -453,20 +453,16 @@ might look something like this:
   [_]
   (ds/system :dev))
 
+;; the :test system uses :dev as a base, then provides overrides
 (defmethod ds/named-system :test
   [_]
   (ds/system :dev
-    {[:db :connection :conf :uri] "jdbc:postgresql://localhost/todoexample_test?user=daniel&password="
-     [:db :migratus :conf :run?]  false
-     [:http :server]              ::disabled
-
-     [:http :middleware :conf :security :anti-forgery] false}))
+    {[:http :server] ::disabled}))
 ```
 
-Note that this system contains an `:env` group. Other components can configure
-values like ports or URLs by referencing values in the in the `:env` group. This
-allows you to use useful libraries like aero to populate your system's
-configuration.
+Note that this system contains an `:env` group. Other components can reference
+values in the `:env` group for their configuration. The `[:http :server]`
+component does this for its port.
 
 ## Advanced usage
 
@@ -600,7 +596,7 @@ one. The code would look something like this:
       (create-logger config)))
 ```
 
-### Before, After, Validation, and "Channels"
+### Before, after, validation, and "channels"
 
 You can define `:before-` and `:after-` handlers for signals:
 
@@ -956,7 +952,7 @@ Other Clojure libraries in the same space:
 - [Component](https://github.com/stuartsierra/component)
 - [Clip](https://github.com/juxt/clip)
 
-## Why Use This and Not That?
+## Why use this and not that?
 
 I cover how donut.system compares to the alternatives in [docs/rationale.org](docs/rationale.org).
 
