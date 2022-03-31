@@ -400,6 +400,70 @@ Calling `donut.system.repl/start` will start this system.
 
 This will reload any changed files and then start your system again.
 
+### Organization and Configuration
+
+Where do you actually put your donut.system-related code? Relatedly, how do you
+handle configuration?
+
+I recommend creating a `your-project.system` namespace to define your base system. It
+might look something like this:
+
+``` clojure
+(ns you-project.system
+  (:require
+   [aero.core :as aero]
+   [clojure.java.io :as io]
+   [donut.system :as ds]
+   [ring.adapter.jetty :as rj]))
+
+;; Use aero for all configuration
+(def env-config
+  (aero/read-config (io/resource "config/env.edn")))
+
+;; define all behavior in base-system
+(def base-system
+  {::ds/defs
+   {:env
+    env-config
+
+    :http
+    {:server
+     {:start (fn [{:keys [handler options]} _ _]
+               (rj/run-jetty handler options))
+      :stop  (fn [_ instance _]
+               (.stop instance))
+      :conf  {:handler (ds/ref :handler)
+              :options {:port  (ds/ref [:env :http-port])
+                        :join? false}}}
+
+     :handler
+     {:start (fn [conf _ _]
+               ;; handler goes here
+               )}}}})
+
+(defmethod ds/named-system :dev
+  [_]
+  base-system)
+
+(defmethod ds/named-system :donut.system/repl
+  [_]
+  (ds/system :dev))
+
+(defmethod ds/named-system :test
+  [_]
+  (ds/system :dev
+    {[:db :connection :conf :uri] "jdbc:postgresql://localhost/todoexample_test?user=daniel&password="
+     [:db :migratus :conf :run?]  false
+     [:http :server]              ::disabled
+
+     [:http :middleware :conf :security :anti-forgery] false}))
+```
+
+Note that this system contains an `:env` group. Other components can configure
+values like ports or URLs by referencing values in the in the `:env` group. This
+allows you to use useful libraries like aero to populate your system's
+configuration.
+
 ## Advanced usage
 
 The topics covered so far should let you get started defining components and
