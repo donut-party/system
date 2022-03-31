@@ -127,7 +127,3 @@ Here, you're overriding the ~:start~ signal handler for the component ~[:group-a
 *** Signals are open
 
 donut.system's design makes it possible for you to define your own custom signals, if you want. You might want to have a ~:heartbeat~ signal, for example. I don't know what you might want to do with this feature, but that's the point: it's an extension point that allows for uses that I haven't foreseen.
-
-** How donut.system fits into a broader vision for a Clojure framework
-
-Another possible reason to use donut.system is that it's intended to be a foundation for a Clojure framework, donut.
