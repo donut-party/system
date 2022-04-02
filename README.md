@@ -421,14 +421,14 @@ might look something like this:
    [ring.adapter.jetty :as rj]))
 
 ;; Use aero for all configuration
-(def env-config
-  (aero/read-config (io/resource "config/env.edn")))
+(defn env-config [& [profile]]
+  (aero/read-config (io/resource "config/env.edn")
+                    (when profile {:profile profile})))
 
 ;; define all behavior in base-system
 (def base-system
   {::ds/defs
-   {:env
-    env-config
+   {:env {}
 
     :http
     {:server
@@ -445,15 +445,18 @@ might look something like this:
                ;; handler goes here
                )}}}})
 
-(defmethod ds/named-system :dev
+(defmethod ds/named-system :base
   [_]
   base-system)
+
+(defmethod ds/named-system :dev
+  [_]
+  (ds/system :base {[:env] (env-config :dev)}))
 
 (defmethod ds/named-system :donut.system/repl
   [_]
   (ds/system :dev))
 
-;; the :test system uses :dev as a base, then provides overrides
 (defmethod ds/named-system :test
   [_]
   (ds/system :dev

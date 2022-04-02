@@ -774,6 +774,7 @@
 ;;---
 
 (def required-component
+  "Communicates that a component needs to be provided."
   {:start (fn [_ _ {:keys [::component-id]}]
             (throw (ex-info "Need to define required component"
                             {:component-id component-id})))})
