@@ -52,6 +52,7 @@ that introduces *system* and *component* abstractions to:
 - [Creating multiple instances of groups of components](#creating-multiple-instances-of-groups-of-components)
 - [Acknowledgments](#acknowledgments)
 - [Status: 🤔](#status-)
+- [Community](#community)
 - [TODO](#todo)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -975,6 +976,11 @@ donut.system takes inspiration from Component, Integrant, and Clip.
 
 This library hasn't been used in production. I'm hoping some folks will find it
 interesting and want to try it out so that we can work out kinks and improve it.
+
+## Community
+
+PRs welcome! Also check out the #donut channel in Clojurians Slack if you wanna
+chat or if you have questions.
 
 ## TODO
 
