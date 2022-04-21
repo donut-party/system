@@ -13,7 +13,7 @@ Testing:
 
 ```shell
 clojure -X:test
-clojure -X:test:cljs
+clojure -X:test-cljs
 ```
 
 Local install:
