@@ -8,4 +8,5 @@
 .lein-repl-history
 .lsp
 .nrepl*
+scratch.clj
 target

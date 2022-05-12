@@ -12,8 +12,12 @@
 ;;; specs
 ;;---
 
+(def Component
+  [:map
+   [::start any?]])
+
 (def ComponentLike
-  "Component-like data shows up in `::defs`, `::resolved`, and `::instances`. None
+  "Component-like data shows up in `::defs`, `::resolved-defs`, and `::instances`. None
   of these are the component per se, but they are the way the component
   manifests in that context."
   [:orn
@@ -66,7 +70,7 @@
   [:map
    [::defs ComponentGroups]
    [::base {:optional true} [:map]]
-   [::resolved {:optional true} ComponentGroups]
+   [::resolved-defs {:optional true} ComponentGroups]
    [::graphs {:optional true} OrderGraphs]
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
@@ -91,21 +95,23 @@
     [:ref Ref]
     [:group-ref GroupRef]]])
 
-;; When ComponentA has a ref to ComponentB, ComponentA is passed the instance of
-;; ComponentB when a signal is applied
+;;---
+;;; schema predicates
+;;---
+
 (def ref? (m/validator Ref))
 (def ref-parser (m/parser Ref))
 (defn ref-type [k]
   (get-in (ref-parser k) [1 0]))
 (defn ref [k] [::ref k])
 
-;; When ComponentA has a group ref to ComponentB, ComponentA is passed the
-;; map of all instances under `key` when a signal is applied
 (def group-ref? (m/validator GroupRef))
 (defn group-ref [x] [::group-ref x])
 
 (def ref-key second)
 
+
+(def component? (m/validator Component))
 ;;---
 ;;; util/ helpers / misc
 ;;---
@@ -127,7 +133,7 @@
        keyword))
 
 ;;---
-;;; merge component defs
+;;; merge base
 ;;---
 
 (defn component-paths
@@ -139,20 +145,6 @@
                        (keys components)))
              #{}
              defs))
-
-(defn def-merge
-  [left right]
-  (if (and (map? left) (map? right))
-    (merge left right)
-    right))
-
-(defn merge-defs
-  [s1 s2 & [merge-fn]]
-  (let [merge-fn (or merge-fn def-merge)]
-    (reduce (fn [system path] (update-in system path merge-fn (get-in s2 path)))
-            s1
-            (into (component-paths s1)
-                  (component-paths s2)))))
 
 (defn base-merge
   [component-def base]
@@ -203,9 +195,9 @@
 (defn- default-resolve-refs
   [system component-id]
   (->> system
-       (sp/setval [::resolved component-id]
+       (sp/setval [::resolved-defs component-id]
                   (sp/select-one [::defs component-id] system))
-       (sp/transform [::resolved component-id (sp/walker (some-fn ref? group-ref? system?))]
+       (sp/transform [::resolved-defs component-id (sp/walker (some-fn ref? group-ref? system?))]
                      (fn [ref-or-system]
                        (let [rt (ref-type ref-or-system)]
                          (cond
@@ -225,7 +217,7 @@
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
-  the thing being ref'd. places result under ::resolved. allows custom
+  the thing being ref'd. places result under ::resolved-defs. allows custom
   resolution fns to be defined with ::resolve-refs, a feature used to work with
   subsystems"
   [system component-id]
@@ -234,7 +226,7 @@
     (default-resolve-refs system component-id)))
 
 (defn resolved
-  [{:keys [::component-id ::resolved]}]
+  [{:keys [::component-id ::resolved-defs]}]
   (sp/select-one component-id resolved))
 
 ;;---
@@ -243,8 +235,8 @@
 ;;
 ;; The order in which signals are applied is important. For example, if an http
 ;; server component depends on a db component, then when you're applying the the
-;; `:start` signal you should apply it to the db and then the http server. If
-;; you're applying the `:stop` signal, the order is reversed: http server, then
+;; `::start` signal you should apply it to the db and then the http server. If
+;; you're applying the `::stop` signal, the order is reversed: http server, then
 ;; db.
 ;;
 ;; These helpers create two digraphs to capture both orderings, using
@@ -341,10 +333,10 @@
 
 (def default-signals
   "which graph to follow to apply signal"
-  {:start   {:order :reverse-topsort}
-   :stop    {:order :topsort}
-   :suspend {:order :topsort}
-   :resume  {:order :reverse-topsort}})
+  {::start   {:order :reverse-topsort}
+   ::stop    {:order :topsort}
+   ::suspend {:order :topsort}
+   ::resume  {:order :reverse-topsort}})
 
 ;;---
 ;;; signal application
@@ -355,7 +347,7 @@
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:reason   ::apply-signal-exception
             :stage    computation-stage
-            :resolved (sp/select-one [::resolved (take 2 computation-stage)]
+            :resolved (sp/select-one [::resolved-defs (take 2 computation-stage)]
                                      system)
             :instance (sp/select-one [::instances (take 2 computation-stage)]
                                      system)}
@@ -384,7 +376,7 @@
    :->instance   (channel-fn system [::instances] component-id)})
 
 (defn- system-identity
-  [_ _ system]
+  [{:keys [::system]}]
   system)
 
 ;;---
@@ -430,9 +422,10 @@
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
-  (stage-fn (sp/select-one [::resolved component-id :conf] system)
-            (sp/select-one [::instances component-id] system)
-            (merge system (channel-fns system component-id))))
+  (stage-fn (merge {::instance (sp/select-one [::instances component-id] system)
+                    ::system   (merge system (channel-fns system component-id))}
+                   (sp/select-one [::resolved-defs component-id ::config] system)
+                   (channel-fns system component-id))))
 
 (defn- stage-result-valid?
   [system]
@@ -480,7 +473,7 @@
 (defn handler-stage-fn
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
-        stage-fn     (or (sp/select-one [::resolved computation-stage-node] system)
+        stage-fn     (or (sp/select-one [::resolved-defs computation-stage-node] system)
                          system-identity)]
     (fn [system]
       (let [stage-result (apply-stage-fn system stage-fn component-id)]
@@ -489,22 +482,22 @@
           system)))))
 
 (defn signal-stage-fn
-  "computation node will be e.g. [:env :http-port :start]"
+  "computation node will be e.g. [:env :http-port ::start]"
   [system computation-stage-node]
-  (let [component-id          (vec (take 2 computation-stage-node))
-        maybe-signal-constant (sp/select-one [::resolved component-id] system)
-        signal-fn             (cond (not maybe-signal-constant)
-                                    system-identity
+  (let [component-id (vec (take 2 computation-stage-node))
+        resolved-def (sp/select-one [::resolved-defs component-id] system)
+        signal-fn    (cond (not resolved-def)
+                           system-identity
 
-                                    (map? maybe-signal-constant)
-                                    (or (sp/select-one [::resolved computation-stage-node] system)
-                                        (when-let [generic-handler (sp/select-one [::resolved component-id ::mk-signal-handler]
-                                                                                  system)]
-                                          (generic-handler (last computation-stage-node)))
-                                        system-identity)
+                           (component? resolved-def)
+                           (or (sp/select-one [::resolved-defs computation-stage-node] system)
+                               (when-let [fallback-handler (sp/select-one [::resolved-defs component-id ::mk-signal-handler]
+                                                                          system)]
+                                 (fallback-handler (last computation-stage-node)))
+                               system-identity)
 
-                                    :else
-                                    (constantly maybe-signal-constant))
+                           :else
+                           (constantly resolved-def))
 
         ;; accomodate setting a constant value for a signal
         signal-fn (if (fn? signal-fn)
@@ -523,20 +516,22 @@
     (handler-stage-fn system computation-stage-node)))
 
 (defn- prep-system-for-apply-signal-stage
+  "Updates system to
+  a) keep track of the current component
+  b) resolve all refs for that component
+  c) track the updated component def which has refs resolved"
   [system component-id]
   (let [part-prepped (-> system
                          (assoc ::component-id component-id
                                 ::component-def (get-in system (into [::defs] component-id)))
                          (resolve-refs component-id))]
-    (assoc part-prepped ::resolved-component (resolved part-prepped))))
+    (assoc part-prepped ::current-resolved-component (resolved part-prepped))))
 
 (defn apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
-        new-system     (try ((computation-stage-fn prepped-system computation-stage-node)
-                             prepped-system)
-
+        new-system     (try ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
                             (catch #?(:clj Throwable
                                       :cljs js/Error) t
                               (throw (apply-signal-exception prepped-system
@@ -559,13 +554,14 @@
 ;;---
 
 (defn- set-component-keys
+  "TODO docs"
   [system signal-name component-keys]
   (assoc system
          ::selected-component-ids
          (set
           (cond
             ;; if not starting, scope component keys to started instances
-            (not= :start signal-name)
+            (not= ::start signal-name)
             (sp/select [(assoc config-collect-group-path 0 ::instances)
                         sp/MAP-KEYS]
                        system)
@@ -619,8 +615,8 @@
 (defn validate-with-malli
   "helper function for validating component instances with malli if a schema is
   present."
-  [_ instance-val {:keys [->validation ::resolved-component]}]
-  (let [{:keys [schema]} resolved-component]
+  [_ instance-val {:keys [->validation ::current-resolved-component]}]
+  (let [{:keys [schema]} current-resolved-component]
     (some-> (and schema (m/explain schema instance-val))
             ->validation)))
 
@@ -653,7 +649,7 @@
 (defn- subsystem-resolver
   [parent-system component-id]
   (->> (default-resolve-refs parent-system component-id)
-       (sp/transform [::resolved component-id]
+       (sp/transform [::resolved-defs component-id]
                      (fn [system]
                        (merge-imports system parent-system)))))
 
@@ -676,8 +672,8 @@
 
 (defn- forward-start-signal
   [signal-name]
-  (fn [_ _ {:keys [->instance ::resolved-component]}]
-    (-> resolved-component
+  (fn [_ _ {:keys [->instance ::current-resolved-component]}]
+    (-> current-resolved-component
         ::subsystem
         (signal signal-name)
         ->instance
@@ -695,7 +691,7 @@
   "Decorates a subsystem so that it can respond to signals when embedded in a
   parent component."
   [subsystem & [imports]]
-  {:start              (forward-start-signal :start)
+  {::start             (forward-start-signal ::start)
    ::mk-signal-handler forward-signal
    ::resolve-refs      subsystem-resolver
    ::imports           (mapify-imports imports)
@@ -704,35 +700,17 @@
 (defn alias-component
   "creates a compnoent that just provides an instance defined elsewhere in the system"
   [component-id]
-  {:start             (fn [{:keys [aliased-component]}]
-                        aliased-component)
-   :aliased-component (ref component-id)})
+  {::start             (fn [{:keys [::aliased-component]}]
+                         aliased-component)
+   ::aliased-component (ref component-id)})
 
 ;;---
 ;;; sugar; system config helper, lift signals to fns
 ;;---
 
-(defn const
-  "Helper for constant map components"
-  [m]
-  {:start m})
-
 (defmulti named-system
   "A way to name different system, e.g. :test, :dev, :prod, etc."
   identity)
-
-(def system-merge-fns
-  {::base merge
-   ::defs merge-defs})
-
-;; TODO spec keys for custom-config
-
-(defn merge-system-config
-  [base-config custom-config]
-  (reduce-kv (fn [system k merge-fn]
-               (update system k merge-fn (k custom-config)))
-             base-config
-             system-merge-fns))
 
 (defn assoc-many
   ([m assocs]
@@ -758,15 +736,15 @@
 
 (defn start
   ([config-name]
-   (signal (system config-name) :start))
+   (signal (system config-name) ::start))
   ([config-name custom-config]
-   (signal (system config-name custom-config) :start))
+   (signal (system config-name custom-config) ::start))
   ([config-name custom-config component-ids]
-   (signal (system config-name custom-config) :start component-ids)))
+   (signal (system config-name custom-config) ::start component-ids)))
 
-(defn stop [system] (signal system :stop))
-(defn suspend [system] (signal system :suspend))
-(defn resume [system] (signal system :resume))
+(defn stop [system] (signal system ::stop))
+(defn suspend [system] (signal system ::suspend))
+(defn resume [system] (signal system :r:esume))
 
 
 ;;---
@@ -775,6 +753,6 @@
 
 (def required-component
   "Communicates that a component needs to be provided."
-  {:start (fn [_ _ {:keys [::component-id]}]
-            (throw (ex-info "Need to define required component"
-                            {:component-id component-id})))})
+  {::start (fn [_ _ {:keys [::component-id]}]
+             (throw (ex-info "Need to define required component"
+                             {:component-id component-id})))})

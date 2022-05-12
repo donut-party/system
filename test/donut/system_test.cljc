@@ -7,13 +7,6 @@
             [loom.alg :as la])
   (:import [clojure.lang ExceptionInfo]))
 
-(deftest merge-defs-test
-  (is (= {:group {:a {:start :b
-                      :stop :c}}}
-         (ds/merge-defs {:group {:a {:start :a
-                                     :stop  :c}}}
-                        {:group {:a {:start :b}}}))))
-
 (deftest merge-base-test
   (is (= #::ds{:base {:before-start [:foo]}
                :defs {:app {:http-server {:before-start [:foo]
@@ -64,38 +57,36 @@
 
 (deftest simple-signal-test
   (is (= #::ds{:instances {:app {:boop "boop"}}}
-         (-> #::ds{:defs {:app {:boop {:start "boop"}}}}
-             (ds/signal :start)
+         (-> #::ds{:defs {:app {:boop {::ds/start "boop"}}}}
+             (ds/signal ::ds/start)
              (select-keys [::ds/instances]))))
 
   (is (= #::ds{:instances {:app {:boop "boop and boop again"}}}
-         (-> #::ds{:defs {:app {:boop {:start "boop"
-                                       :stop (fn [_ instance _]
-                                               (str instance " and boop again"))}}}}
-             (ds/signal :start)
-             (ds/signal :stop)
+         (-> #::ds{:defs {:app {:boop #::ds{:start "boop"
+                                            :stop (fn [{:keys [::ds/instance]}]
+                                                    (str instance " and boop again"))}}}}
+             (ds/signal ::ds/start)
+             (ds/signal ::ds/stop)
              (select-keys [::ds/instances])))))
 
 (deftest ref-test
   (testing "referred port number is passed to referrer"
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
-           (-> #::ds{:defs {:env {:http-port {:start 9090}}
-                            :app {:http-server {:start (fn [{:keys [port]} _ _]
-                                                         port)
-                                                :conf  {:port (ds/ref [:env :http-port])}}}}}
-               (ds/signal :start)
+           (-> #::ds{:defs {:env {:http-port #::ds{:start 9090}}
+                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                                                     :config {:port (ds/ref [:env :http-port])}}}}}
+               (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
 (deftest local-ref-test
   (testing "ref of keyword resolves to component in same group"
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}}
-           (-> #::ds{:defs {:app {:http-server {:start (fn [{:keys [port]} _ _]
-                                                        port)
-                                                :conf  {:port (ds/ref :http-port)}}
+           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                                                     :config {:port (ds/ref :http-port)}}
                                   :http-port   9090}}}
-               (ds/signal :start)
+               (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
 (deftest group-ref-test
@@ -104,12 +95,11 @@
                                    :timeout   5000}
                              :app {:http-server {:http-port 9090
                                                  :timeout   5000}}}}
-           (-> #::ds{:defs {:env {:http-port {:start 9090}
-                                  :timeout   {:start 5000}}
-                            :app {:http-server {:start (fn [{:keys [env]} _ _]
-                                                         env)
-                                                :conf  {:env (ds/group-ref :env)}}}}}
-               (ds/signal :start)
+           (-> #::ds{:defs {:env {:http-port #::ds{:start 9090}
+                                  :timeout   #::ds{:start 5000}}
+                            :app {:http-server #::ds{:start  (fn [{:keys [env]}] env)
+                                                     :config {:env (ds/group-ref :env)}}}}}
+               (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
 
@@ -118,10 +108,9 @@
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port 9090}
-                            :app {:http-server {:start (fn [{:keys [port]} _ _]
-                                                         port)
-                                                :conf  {:port (ds/ref [:env :http-port])}}}}}
-               (ds/signal :start)
+                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                                                     :config {:port (ds/ref [:env :http-port])}}}}}
+               (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
 (deftest validate-component
@@ -134,12 +123,12 @@
                                                                 :value  "9090"}]}}}}}
            (-> #::ds{:base {:after-start ds/validate-with-malli}
 
-                     :defs {:env {:http-port {:start  "9090"
-                                              :schema schema}}
+                     :defs {:env {:http-port {::ds/start "9090"
+                                              :schema    schema}}
                             :app {:http-server {:start (fn [{:keys [port]} _ _]
                                                          port)
                                                 :conf  {:port (ds/ref [:env :http-port])}}}}}
-               (ds/signal :start)
+               (ds/signal ::ds/start)
                (select-keys [::ds/out]))))))
 
 (deftest lifecycle-values-ignored-when-not-system
@@ -152,12 +141,12 @@
     (is (= expected
            (->  system
                 (assoc-in [::ds/defs :app :http/server :before-start] (constantly nil))
-                (ds/signal :start)
+                (ds/signal ::ds/start)
                 (select-keys [::ds/instances]))))
     (is (= expected
            (->  system
                 (assoc-in [::ds/defs :app :http/server :after-start] (constantly nil))
-                (ds/signal :start)
+                (ds/signal ::ds/start)
                 (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
@@ -184,7 +173,7 @@
                                                              (->info "info")))
                                                 :conf  {:port (ds/ref :http-port)}}
                                   :http-port   9090}}}
-               (ds/signal :start)
+               (ds/signal ::ds/start)
                (select-keys [::ds/instances ::ds/out]))))))
 
 (deftest subsystem-test
@@ -221,7 +210,7 @@
                             :system-2 (ds/subsystem-component
                                        subsystem
                                        #{(ds/group-ref :common-services)})}}}
-                    (ds/signal :start))]
+                    (ds/signal ::ds/start))]
 
     (is (= {:job-queue "job queue"
             :db        "db"
