@@ -5,13 +5,13 @@
 
 
 (def HTTPServer
-  {:start (fn [{:keys [handler options]} _ _]
-            (rj/run-jetty handler options))
-   :stop  (fn [_ instance _]
-            (.stop instance))
-   :conf  {:handler (ds/ref :handler)
-           :options {:port  (ds/ref :port)
-                     :join? false}}})
+  #::ds{:start (fn [{:keys [handler options]}]
+                 (rj/run-jetty handler options))
+        :stop  (fn [{:keys [::ds/instance]}]
+                 (.stop instance))
+        :conf  {:handler (ds/ref :handler)
+                :options {:port  (ds/ref :port)
+                          :join? false}}})
 
 (def system
   {::ds/defs

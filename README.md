@@ -295,17 +295,17 @@ handling to be extensible. Other component libraries use the term _lifecycle_,
 which I think doesn't convey the sense of extensibility that's possible with
 donut.system.
 
-Out of the box, donut.system recognizes `:start`, `:stop`, `:suspend`, and
-`:resume` signals, but it's possible to handle arbitrary signals -- say,
-`:validate` or `:status`. To do that, you just need to add a little
-configuration to your system:
+Out of the box, donut.system recognizes `::ds/start`, `::ds/stop`,
+`::ds/suspend`, and `::ds/resume` signals, but it's possible to handle arbitrary
+signals -- say, `:your.app/validate` or `:your.app/status`. To do that, you just
+need to add a little configuration to your system:
 
 ``` clojure
 (def system
   {::ds/defs    {;; components go here
                  }
-   ::ds/signals {:status   {:order :topsort}
-                 :validate {:order :reverse-topsort}}})
+   ::ds/signals {:your.app/status   {:order :topsort}
+                 :your.app/validate {:order :reverse-topsort}}})
 ```
 
 `::ds/signals` is a map where keys are signal names and values are configuration
@@ -320,15 +320,16 @@ map, which is:
 
 ``` clojure
 (def default-signals
-  {:start   {:order :reverse-topsort}
-   :stop    {:order :topsort}
-   :suspend {:order :topsort}
-   :resume  {:order :reverse-topsort}})
+  "which graph to follow to apply signal"
+  {::start   {:order :reverse-topsort}
+   ::stop    {:order :topsort}
+   ::suspend {:order :topsort}
+   ::resume  {:order :reverse-topsort}})
 ```
 
 ### Systems
 
-Systems organize components and provide a systematic way of initiating component
+Systems organize components and provide a consistent way to initiating component
 behavior. You send a signal to a system, and the system ensures its components
 handle the signal in the correct order.
 
@@ -369,7 +370,7 @@ You don't have to override an entire component. You can also override just a
 signal handler:
 
 ``` clojure
-(ds/system :test {[:services :queue :start] (fn mock-start-queue [conf _ _])})
+(ds/system :test {[:services :queue ::ds/start] (fn mock-start-queue [conf _ _])})
 ```
 
 Overrides are a map where keys are _def paths_, and values are whatever value
@@ -453,13 +454,13 @@ might look something like this:
 
     :http
     {:server
-     {:start (fn [{:keys [handler options]} _ _]
-               (rj/run-jetty handler options))
-      :stop  (fn [_ instance _]
-               (.stop instance))
-      :conf  {:handler (ds/ref :handler)
-              :options {:port  (ds/ref [:env :http-port])
-                        :join? false}}}
+     #::ds{:start  (fn [{:keys [handler options]}]
+                     (rj/run-jetty handler options))
+           :stop   (fn [{:keys [::ds/instance]}]
+                     (.stop instance))
+           :config {:handler (ds/ref :handler)
+                    :options {:port  (ds/ref [:env :http-port])
+                              :join? false}}}
 
      :handler
      {:start (fn [conf _ _]
@@ -487,6 +488,28 @@ might look something like this:
 Note that this system contains an `:env` group. Other components can reference
 values in the `:env` group for their configuration. The `[:http :server]`
 component does this for its port.
+
+Additionally, refs can "reach" farther into the referenced component. For
+example, this would work:
+
+``` clojure
+(def base-system
+  {::ds/defs
+   {:env
+    {:http {:port 8080}}
+
+    :http 
+    {:server
+     #::ds{:start  (fn [{:keys [handler options]}]
+                     (rj/run-jetty handler options))
+           :config {:handler (ds/ref :handler)
+                    :options {:port  (ds/ref [:env :http :port])
+                              :join? false}}}}}})
+```
+
+Note the second-to-last-line includes `(ds/ref [:env :http :port])` - this will
+corrrectly reference the HTTP port.
+
 
 ## Advanced usage
 
@@ -521,13 +544,13 @@ could do that:
 
 
 (def HTTPServer
-  {:start (fn [{:keys [handler options]} _ _]
-            (rj/run-jetty handler options))
-   :stop  (fn [_ instance _]
-            (.stop instance))
-   :conf  {:handler (ds/ref :handler)
-           :options {:port  (ds/ref :port)
-                     :join? false}}})
+  #::ds{:start (fn [{:keys [handler options]}]
+                 (rj/run-jetty handler options))
+        :stop  (fn [{:keys [::ds/instance]}]
+                 (.stop instance))
+        :conf  {:handler (ds/ref :handler)
+                :options {:port  (ds/ref :port)
+                          :join? false}}})
 
 (def system
   {::ds/defs
@@ -563,25 +586,25 @@ first-class support for groups.
 You can select parts of a system to send a signal to:
 
 ``` clojure
-(let [running-system (ds/signal system :start nil #{[:group-1 :component-1]
-                                                    [:group-1 :component-2]})]
-  (ds/signal running-system :stop))
+(let [running-system (ds/signal system ::ds/start nil #{[:group-1 :component-1]
+                                                        [:group-1 :component-2]})]
+  (ds/signal running-system ::ds/stop))
 ```
 
 First, we call `ds/start` and pass it an optional third argument, a set of
 _selected components_ This will filter out all components that aren't
 descendants of `[:group-1 :component-1]` or `[:group-2 :component-2]` and send
-the `:start` signal only to them.
+the `::ds/start` signal only to them.
 
 Your selection is stored in the system state that gets returned, so when you
-call `(ds/stop running-system)` it only sends the `:stop` signal to the
-components that had received the `:start` signal.
+call `(ds/stop running-system)` it only sends the `::ds/stop` signal to the
+components that had received the `::ds/start` signal.
 
 You can also select component groups by using just the group's name for your
 selection, like so:
 
 ``` clojure
-(ds/signal system :start nil #{:group-1})
+(ds/signal system ::ds/start nil #{:group-1})
 ```
 
 ### Stages
@@ -594,13 +617,13 @@ exception is thrown when starting other components:
 ;; This is mostly pseudocode
 (def system
   {::ds/defs
-   {:boot {:logger         {:start ...
-                            :stop  ...}
-           :error-reporter {:start ...
-                            :stop  ...}}
-    :app  {:server {:start ...}}}})
+   {:boot {:logger         #::ds{:start ...
+                                 :stop  ...}
+           :error-reporter #::ds{:start ...
+                                 :stop  ...}}
+    :app  {:server #::ds{:start ...}}}})
 
-(let [booted-system  (ds/signal system :start #{:boot})
+(let [booted-system  (ds/signal system ::ds/start #{:boot})
       logger         (get-in booted-system [::ds/instances :boot :logger])
       error-reporter (get-in booted-system [::ds/instances :boot :error-reporter])]
   (try (ds/signal booted-system :start)
@@ -609,7 +632,7 @@ exception is thrown when starting other components:
          (report-error error-report e))))
 ```
 
-Note that you would need to make the `:start` handlers for `:logger` and
+Note that you would need to make the `::ds/start` handlers for `:logger` and
 `:error-reporter` _idempotent_, meaning that calling `:start` on an
 already-started component should not create a new instance but use an existing
 one. The code would look something like this:
