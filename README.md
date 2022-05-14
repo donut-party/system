@@ -760,20 +760,19 @@ One way you could make use of these features is to write something like this:
    [donut.system :as ds]
    [malli.core :as m]))
 
-(defn validate-conf
-  [{:keys [->validation ::ds/system] :as config}]
-  (let [schema (get-in system [::ds/component-def ::ds/schema])]
-    (when-let [errors (and schema (m/explain schema config))]
-      (->validation errors))))
+(defn validate-config
+  [{:keys [->validation schema] :as config}]
+  (when-let [errors (and schema (m/explain schema config))]
+    (->validation errors)))
 
 (def system
   {::ds/defs
-   {:group {:component-a #::ds{:before-start validate-conf
+   {:group {:component-a #::ds{:before-start validate-config
                                :start        "component a"
-                               :schema       [:map [:foo any?] [:baz any?]]}
-            :component-b #::ds{:before-start validate-conf
+                               :config       {:schema [:map [:foo any?] [:baz any?]]}}
+            :component-b #::ds{:before-start validate-config
                                :start        "component b"
-                               :schema       [:map [:foo any?] [:baz any?]]}
+                               :config       {:schema [:map [:foo any?] [:baz any?]]}}
             :component-c #::ds{:start "component-c"}}}})
 ```
 
@@ -793,14 +792,13 @@ example could be rewritten like this:
    [donut.system :as ds]
    [malli.core :as m]))
 
-(defn validate-conf
-  [conf _ {:keys [->validation ::ds/component-def]}]
-  (let [schema (:schema component-def)]
-    (when-let [errors (and schema (m/explain schema conf))]
-      (->validation errors))))
+(defn validate-config
+  [{:keys [->validation schema] :as config}]
+  (when-let [errors (and schema (m/explain schema config))]
+    (->validation errors)))
 
 (def system
-  {::ds/base {:before-start validate-conf}
+  {::ds/base #::ds{:before-start validate-config}
    ::ds/defs
    {:group {:component-a {:start  "component a"
                           :schema [:map [:foo any?] [:baz any?]]}
@@ -832,17 +830,16 @@ do, I've tried to make it straightforward. Check it out:
   [print-prefix]
   {::ds/defs
    {:workers
-    {:print-worker {:start (fn [{:keys [stack]} _ _]
-                             (mk-print-thread print-prefix stack))
-                    :stop  (fn [_ instance _]
-                             (.stop instance))
-                    :conf  {:stack (ds/ref [:services :stack])}}}}})
+    {:print-worker #::ds{:start  (fn [{:keys [stack]}]
+                                   (mk-print-thread print-prefix stack))
+                         :stop   (fn [{:keys [::ds/instance]}]
+                                   (.stop instance))
+                         :config {:stack (ds/ref [:services :stack])}}}}})
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [_ _ _] (atom (vec (range 20))))
-                       :stop  (fn [_ instance _] (reset! instance []))}}
-
+   {:services {:stack #::ds{:start (fn [_] (atom (vec (range 20))))
+                            :stop  (fn [{:keys [::ds/instance]}] (reset! instance []))}}
     :printers {:printer-1 (ds/subsystem-component
                            (print-worker-system ":printer-1")
                            #{(ds/group-ref :services)})
@@ -861,12 +858,12 @@ We generate definitions for the subsystems with the function
 references `[:services :stack]`, but notice that there is no `[:services
 :stack]` component in the `print-worker-system` definition.
 
-The parent system wraps these subsystems with a call to
+Inernally, the parent system wraps these subsystems with a call to
 `ds/subsystem-component`. `ds/subsystem-component` returns a component def, a
-map with a `:start` signal handler that "forwards" the signal to the subsystem.
-The component def also includes the key `::ds/mk-signal-handler`, a privileged
-key that acts as default signal handler. `::ds/mk-signal-handler` is responsible
-for forwarding all other signals to the subsystem.
+map with a `::ds/start` signal handler that "forwards" the signal to the
+subsystem. The component def also includes the key `::ds/mk-signal-handler`, a
+privileged key that acts as default signal handler. `::ds/mk-signal-handler` is
+responsible for forwarding all other signals to the subsystem.
 
 `ds/subsystem-component` takes an optional second argument, a set of refs that
 should be imported into the subsystem. This is how the subsystems can reference
@@ -960,8 +957,8 @@ following map for easy consumption in a donut.system project:
 
 ``` clojure
 (def CronutComponent
-  {:start (fn [conf _ _] (initialize conf))
-   :stop  (fn [_ scheduler _] (shutdown scheduler))})
+  :donut.system{:start (fn [conf _ _] (initialize conf))
+                :stop  (fn [_ scheduler _] (shutdown scheduler))})
 ```
 
 What if you want to define a component group without depending on donut.system?
@@ -970,9 +967,9 @@ have local refs to each other. Here's how you could do that:
 
 ``` clojure
 (def CoolLibComponentGroup
-  {:component-a {:start (fn [conf _ _] ...)}
-   :component-b {:start (fn [{:keys [component-a] _ _}])
-                 :conf  {:component-a [:donut.system/ref :component-a]}}})
+  {:component-a #::ds{:start (fn [_] ...)}
+   :component-b #::ds{:start  (fn [{:keys [component-a]}])
+                      :config {:component-a [:donut.system/ref :component-a]}}})
 ```
 
 The key is that refs are represented with the vector `[:donut.system/ref

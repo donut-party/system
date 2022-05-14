@@ -15,17 +15,16 @@
   [print-prefix]
   {::ds/defs
    {:workers
-    {:print-worker {:start (fn [{:keys [stack]} _ _]
-                             (mk-print-thread print-prefix stack))
-                    :stop  (fn [_ instance _]
-                             (.stop instance))
-                    :conf  {:stack (ds/ref [:services :stack])}}}}})
+    {:print-worker #::ds{:start  (fn [{:keys [stack]}]
+                                   (mk-print-thread print-prefix stack))
+                         :stop   (fn [{:keys [::ds/instance]}]
+                                   (.stop instance))
+                         :config {:stack (ds/ref [:services :stack])}}}}})
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [_ _ _] (atom (vec (range 20))))
-                       :stop  (fn [_ instance _] (reset! instance []))}}
-
+   {:services {:stack #::ds{:start (fn [_] (atom (vec (range 20))))
+                            :stop  (fn [{:keys [::ds/instance]}] (reset! instance []))}}
     :printers {:printer-1 (ds/subsystem-component
                            (print-worker-system ":printer-1")
                            #{(ds/group-ref :services)})
