@@ -132,7 +132,7 @@
                                                                 :in     []
                                                                 :schema schema
                                                                 :value  "9090"}]}}}}}
-           (-> #::ds{:base {::ds/after-start ds/validate-with-malli}
+           (-> #::ds{:base {::ds/after-start ds/validate-instance-with-malli}
 
                      :defs {:env {:http-port #::ds{:start  "9090"
                                                    :schema schema}}

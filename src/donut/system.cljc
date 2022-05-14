@@ -615,13 +615,14 @@
         (apply-signal-computation-graph)
         (clean-after-signal-apply))))
 
-(defn validate-with-malli
+(defn validate-instance-with-malli
   "helper function for validating component instances with malli if a schema is
   present."
   [{:keys [::instance ->validation ::system]}]
   (let [{:keys [::schema]} (::current-resolved-component system)]
     (some-> (and schema (m/explain schema instance))
             ->validation)))
+
 ;;---
 ;;; subsystems
 ;;---
