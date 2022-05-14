@@ -633,7 +633,7 @@ exception is thrown when starting other components:
 ```
 
 Note that you would need to make the `::ds/start` handlers for `:logger` and
-`:error-reporter` _idempotent_, meaning that calling `:start` on an
+`:error-reporter` _idempotent_, meaning that calling `::ds/start` on an
 already-started component should not create a new instance but use an existing
 one. The code would look something like this:
 
@@ -645,17 +645,17 @@ one. The code would look something like this:
 
 ### Before, after, validation, and "channels"
 
-You can define `:before-` and `:after-` handlers for signals:
+You can define `before-` and `after-` handlers for signals:
 
 ``` clojure
 (def system
   {::ds/defs
-   {:app {:server {:before-start (fn [_ _ _] (prn "before-start"))
-                   :start        (fn [_ _ _] (prn "start"))
-                   :after-start  (fn [_ _ _] (prn "after-start"))}}}})
+   {:app {:server #::ds{:before-start (fn [_] (prn "before-start"))
+                        :start        (fn [_] (prn "start"))
+                        :after-start  (fn [_] (prn "after-start"))}}}})
 ```
 
-You can use these _lifecycle functions_ to gather information about your system
+You can use these _lifecycle handlers_ to gather information about your system
 as it handles signals, and to perform validation. Let's look at a couple use
 cases: printing signal progress and validating configs.
 
@@ -663,55 +663,56 @@ Here's how you might print signal progress:
 
 ``` clojure
 (defn print-progress
-  [_ _ {:keys [::ds/component-id]}]
-  (prn component-id))
+  [{:keys [::ds/system]}]
+  (prn (::ds/component-id system)))
 
 (def system
   {::ds/defs
-   {:group {:component-a {:start       "component a"
-                          :after-start print-progress}
-            :component-b {:start       "component b"
-                          :after-start print-progress}}}})
+   {:group {:component-a #::ds{:start       "component a"
+                               :after-start print-progress}
+            :component-b #::ds{:start       "component b"
+                               :after-start print-progress}}}})
 
-(ds/signal system :start)
+(ds/signal system ::ds/start)
 ;; =>
 [:group :component-a]
 [:group :component-b]
 ```
 
 The function `print-progress` is used as the `:after-start` handler for both
-`:component-a` and `:component-b`. It destructures `::ds/component-id` from the
-third argument and prints it. 
+`:component-a` and `:component-b`. It destructures `::ds/system`, then prints
+`(::ds/component-id system)`.
 
-We haven't seen the third argument used before; its value is the system map. The
-current component's id gets assoc'd into the system map under
-`::ds/component-id` prior to calling a signal handler.
+That's right: signal handlers are passed the entire system under the
+`::ds/system` key of their argument. The current component's id gets assoc'd
+into the system map under `::ds/component-id` prior to calling a signal handler.
 
-The system map also has a collection of "channel" functions merged into it which
-we can use to gather information about components and perform validation. Look
-at how we destructure `->info` and `->validation` from the third argument in
-these `:after-start` handlers:
+The handler argument also has a collection of "channel" functions merged into it
+which we can use to gather information about components and perform validation.
+Look at how we destructure `->info` and `->validation` from the third argument
+in these `:after-start` handlers:
 
 ``` clojure
 (def system
   {::ds/defs
-   {:group {:component-a {:start       "component a"
-                          :after-start (fn [_ _ {:keys [->info]}]
-                                         (->info "component a is valid"))}
-            :component-b {:start       "component b"
-                          :after-start (fn [_ _ {:keys [->validation]}]
-                                         (->validation "component b is invalid"))
-                          ;; This `:conf` is only here to create the dependency
-                          ;; order for demonstration purpose
-                          :conf        {:ref (ds/ref :component-a)}}
-            :component-c {:start       "component-c"
-                          :after-start (fn [_ _ _]
-                                         (prn "this won't print"))
-                          ;; This `:conf` is only here to create the dependency
-                          ;; order for demonstration purpose
-                          :conf        {:ref (ds/ref :component-b)}}}}})
+   {:group {:component-a #::ds{:start       "component a"
+                               :after-start (fn [{:keys [->info]}]
+                                              (->info "component a is valid"))}
+            :component-b #::ds{:start       "component b"
+                               :after-start (fn [{:keys [->validation]}]
+                                              (->validation "component b is invalid"))
+                               ;; This `:config` is only here to create the
+                               ;; dependency order for demonstration purpose
+                               :config      {:ref (ds/ref :component-a)}}
+            :component-c #::ds{:start       "component-c"
+                               :after-start (fn [_]
+                                              (prn "this won't print"))
+                               ;; This `:config` is only here to create the
+                               ;; dependency order for demonstration purpose
+                               :config      {:ref (ds/ref :component-b)}}}}})
 
-(::ds/out (ds/signal system :start))
+
+(::ds/out (ds/signal system ::ds/start))
 ;; =>
 {:info       {:group {:component-a "component a is valid"}},
  :validation {:group {:component-b "component b is invalid"}}}
@@ -740,9 +741,9 @@ It's not obvious what's going on here, so let's step through it.
    No. The rules for handling return values are:
    
    1. If a system map is returned, convey that forward
-   2. Otherwise, if this is a _lifecycle function_ (`:before-start` or `:after-start`)
-      ignore the return value
-   3. Otherwise, this is a signal handler (`:start`). Place its return value
+   2. Otherwise, if this is a _lifecycle function_ (`::ds/before-start` or
+      `::ds/after-start`) ignore the return value
+   3. Otherwise, this is a signal handler (`:ds/start`). Place its return value
       under `::ds/instances`.
 3. `(->validation "component b is invalid")` is similar to `->info` in that it
    places a value in the system map. However, it differs in that it also has
@@ -760,20 +761,20 @@ One way you could make use of these features is to write something like this:
    [malli.core :as m]))
 
 (defn validate-conf
-  [conf _ {:keys [->validation ::ds/component-def]}]
-  (let [schema (:schema component-def)]
-    (when-let [errors (and schema (m/explain schema conf))]
+  [{:keys [->validation ::ds/system] :as config}]
+  (let [schema (get-in system [::ds/component-def ::ds/schema])]
+    (when-let [errors (and schema (m/explain schema config))]
       (->validation errors))))
 
 (def system
   {::ds/defs
-   {:group {:component-a {:before-start validate-conf
-                          :start        "component a"
-                          :schema       [:map [:foo any?] [:baz any?]]}
-            :component-b {:before-start validate-conf
-                          :start        "component b"
-                          :schema       [:map [:foo any?] [:baz any?]]}
-            :component-c {:start "component-c"}}}})
+   {:group {:component-a #::ds{:before-start validate-conf
+                               :start        "component a"
+                               :schema       [:map [:foo any?] [:baz any?]]}
+            :component-b #::ds{:before-start validate-conf
+                               :start        "component b"
+                               :schema       [:map [:foo any?] [:baz any?]]}
+            :component-c #::ds{:start "component-c"}}}})
 ```
 
 We can create a generic `validate-component` function that checks whether a
