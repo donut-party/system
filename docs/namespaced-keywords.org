@@ -1,0 +1,47 @@
+#+title: Namespaced Keywords
+
+Clojure has /namespaced keywords/ so that you can use keywords that avoid name
+collisions. ~:start~ is an example of an un-namespaced keyword, and
+~:donut.system/start~ is an example of a namespaced keyword.
+
+Clojure has some conveniences for writing more compact code when you're using
+namespaced keywords. If you require a namespace and specify an alias, you can
+use that alias for namespaced keywords:
+
+#+begin_src clojure
+(ns donut.examples.printer
+  (:require [donut.system :as ds]))
+
+;; use two colons to exand a namespace alias
+::ds/start
+;; => :donut.system/start
+
+;; when creating maps, you can specify a namespace for all the keys in the map:
+:donut.system{:start "start component"}
+;; this is the same as {:donut.system/start "start component"}
+
+;; You can also use a namespace alias
+#::ds{:start "start component"}
+;; => {:donut.system/start "start component"}
+
+#::ds{:start "start component"
+      :stop  "stop component"}
+;; => {:donut.system/start "start component", :donut.system/stop "stop component"}
+#+end_src
+
+
+~donut.system~ heavily relies on namespaced keywords to avoid name collisions.
+When you define a component, you use keys like ~:donut.system/start~ and
+~:donut.system/config~. By using namespaced keywords like this the library is
+more open to being extended in unforeseen ways.
+
+You can use namespaced keywords when destructuring arguments:
+
+#+begin_src clojure
+(def Component
+  {::ds/start "start component"})
+
+(let [{:keys [::ds/start]} Component]
+  (prn "start is: " start))
+;; prints "start component"
+#+end_src

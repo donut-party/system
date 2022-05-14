@@ -64,7 +64,7 @@ definitions_. A component definition can include _references_ to other
 components and _signal handlers_ that specify behavior. 
 
 Here's an example system that defines a `:printer` component and a `:stack`
-component. When the system receives the `:start` signal, the `:printer` pops an
+component. When the system receives the `:donut.system/start` signal, the `:printer` pops an
 item off the `:stack` and prints it once a second:
 
 ``` clojure
@@ -73,28 +73,33 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [{:keys [items]} _ _]
-                                (atom (vec (range items))))
-                       :stop  (fn [_ instance _] (reset! instance []))
-                       :conf  {:items 10}}}
-    :app      {:printer {:start (fn [{:keys [stack]} _ _]
-                                  (doto (Thread.
-                                         (fn []
-                                           (prn "peek:" (peek @stack))
-                                           (swap! stack pop)
-                                           (Thread/sleep 1000)
-                                           (recur)))
-                                    (.start)))
-                         :stop  (fn [_ instance _]
-                                  (.interrupt instance))
-                         :conf  {:stack (ds/ref [:services :stack])}}}}})
+   {:services {:stack #::ds{:start  (fn [{:keys [items]}]
+                                      (atom (vec (range items))))
+                            :stop   (fn [{:keys [::ds/instance]}]
+                                      (reset! instance []))
+                            :config {:items 10}}}
+    :app      {:printer #::ds{:start  (fn [{:keys [stack]}]
+                                        (doto (Thread.
+                                               (fn []
+                                                 (prn "peek:" (peek @stack))
+                                                 (swap! stack pop)
+                                                 (Thread/sleep 1000)
+                                                 (recur)))
+                                          (.start)))
+                              :stop   (fn [{:keys [::ds/instance]}]
+                                        (.interrupt instance))
+                              :config {:stack (ds/ref [:services :stack])}}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
-(let [running-system (ds/signal system :start)]
-  (Thread/sleep 5000)
-  (ds/signal running-system :stop))
-
+(comment
+  (let [running-system (ds/signal system ::ds/start)]
+    (Thread/sleep 5000)
+    (ds/signal running-system ::ds/stop)))
 ```
+
+> **NOTE**: donut.system makes heavy use of _namespaced keywords_. If the
+> `#::ds{:start ...}` syntax above is new to you, please [read this
+> doc](docs/namespaced-keywords.org).
 
 In this example, you define `system`, a map that contains just one key,
 `::ds/defs`. `::ds/defs` is a map of _component groups_, of which there are two:
@@ -103,11 +108,11 @@ In this example, you define `system`, a map that contains just one key,
 and `:services` are arbitrary names with no special meaning; you can name groups
 whatever you want.)
 
-Both component definitions contain `:start` and `:stop` signal handlers, as well
-as a `:conf`. The `:printer` component's `:conf` contains a _ref_ to the
-`:stack` component.
+Both component definitions contain `::ds/start` and `::ds/stop` signal handlers,
+as well as a `::ds/config`. The `:printer` component's `:ds/config` contains a
+_ref_ to the `:stack` component.
 
-You start the system by calling `(ds/signal system :start)`. This produces an
+You start the system by calling `(ds/signal system ::ds/start)`. This produces an
 updated system map (bound to `running-system`) which you then use when stopping
 the system with `(ds/signal running-system :stop)`.
 
@@ -121,9 +126,9 @@ this system with a single component definition shows:
 
 ``` clojure
 (def Stack
-  {:start (fn [{:keys [items]} _ _] (atom (vec (range items))))
-   :stop  (fn [_ instance _] (reset! instance []))
-   :conf  {:items 10})
+  #::ds{:start  (fn [{:keys [items]}] (atom (vec (range items))))
+        :stop   (fn [{:keys [::ds/instance]}] (reset! instance []))
+        :config {:items 10}})
 
 (def system {::ds/defs {:services {:stack Stack}}})
 ```
@@ -140,14 +145,21 @@ A def map can contain _signal handlers_, which are used to create component
 _instances_ and implement component behavior. A def can also contain additional
 configuration values that will get passed to the signal handlers.
 
-In the example above, we've defined `:start` and `:stop` signal handlers. Signal
-handlers are just functions with three arguments. The first argument is the
-value of `:conf`: you can see that the `:start` handler destructures `items` out
-of its first argument. The value of `items` will be `10`.
+In the example above, we've defined `::ds/start` and `::ds/stop` signal
+handlers. Signal handlers are just functions with one argument, a map. How is
+this map constructed?
+
+The value of your component's `::ds/config` is used as the starting point. In
+the example above, that means that the map will contain `{:items 10}`. (This
+also implies that `::ds/config` must be a map.) You can see that the
+`::ds/start` signal handler destructures `items` out of its first argument.
+
+(Other key/value pairs get added to this map, and I'll cover those as we need
+them.)
 
 This approach to defining components lets us easily modify them. If you want to
-mock out a component, you just have to use `assoc-in` to assign a new `:start`
-signal handler.
+mock out a component, you just have to use `assoc-in` to assign a new
+`::ds/start` signal handler.
 
 Signal handlers return a _component instance_, which is stored in the system map
 under `::ds/instances`. Try this to see a system's instances:
@@ -156,15 +168,21 @@ under `::ds/instances`. Try this to see a system's instances:
 (::ds/instances (ds/signal system :start))
 ```
 
-Component instances are passed as the second argument to signal handlers. When
-you `:start` a `Stack` it creates a new atom, and when you `:stop` it the atom
-is passed in as the second argument to the `:stop` signal handler.
+Component instances are added to the signal handler's argument under the
+`::ds/instance` key. When you apply the `::ds/start` signal to a `Stack`
+component, it creates a new atom, and when you `::ds/stop` it the atom is passed
+in under `::ds/instance` key. In the example above, the `::ds/stop` signal
+handler destructures this:
+
+``` clojure
+(fn [{:keys [::ds/instance]}] (reset! instance []))
+```
 
 This is how you can allocate and deallocate the resources needed for your
-system: the `:start` handler will create a new object or connection or thread
-pool or whatever, and place that in the system map under `::ds/instances`. The
-instance is passed to the `:stop` handler, which can call whatever functions or
-methods are needed to to deallocate the resource.
+system: the `::ds/start` handler will create a new object or connection or
+thread pool or whatever, and place that in the system map under
+`::ds/instances`. The instance is passed to the `::ds/stop` handler, which can
+call whatever functions or methods are needed to to deallocate the resource.
 
 You don't have to define a handler for every signal. Components that don't have
 a handler for a signal are essentially skipped when you send a signal to a
