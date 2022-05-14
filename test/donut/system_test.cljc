@@ -79,6 +79,17 @@
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
+(deftest deep-ref-test
+  (testing "refs can be of arbitrary depth"
+    (is (= #::ds{:instances {:env {:http {:port 9090}}
+                             :app {:http-server 9090}}}
+           (-> #::ds{:defs {:env {:http {:port 9090}}
+                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                                                     ;; [:env :http :port] reaches into the :http "component"
+                                                     :config {:port (ds/ref [:env :http :port])}}}}}
+               (ds/signal ::ds/start)
+               (select-keys [::ds/instances]))))))
+
 (deftest local-ref-test
   (testing "ref of keyword resolves to component in same group"
     (is (= #::ds{:instances {:app {:http-server 9090

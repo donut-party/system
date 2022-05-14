@@ -83,7 +83,7 @@
 (def RefKey
   [:orn
    [:local-ref keyword?]
-   [:full-ref [:tuple keyword? keyword?]]])
+   [:full-ref [:cat keyword? keyword? [:* keyword?]]]])
 (def Ref [:cat [:enum ::ref] RefKey])
 
 (def GroupRefKey keyword?)
