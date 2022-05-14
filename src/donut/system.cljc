@@ -227,7 +227,7 @@
 
 (defn resolved
   [{:keys [::component-id ::resolved-defs]}]
-  (sp/select-one component-id resolved))
+  (sp/select-one component-id resolved-defs))
 
 ;;---
 ;;; generate component signal apply order graphs
@@ -355,9 +355,11 @@
 
 (defn- handler-lifecycle-names
   [signal-name]
-  {:apply-signal signal-name
-   :before       (strk :before- signal-name)
-   :after        (strk :after- signal-name)})
+  (let [snns (namespace signal-name)
+        snn  (name signal-name)]
+    {:apply-signal signal-name
+     :before       (keyword snns (str "before-" snn))
+     :after        (keyword snns (str "after-" snn))}))
 
 (defn- channel-fn
   [system channel component-id]
@@ -417,6 +419,7 @@
                                                [::signals signal :order]))))
 
 (defn signal-stage?
+  "The stage corresponds to a signal, not a signal lifecycle"
   [stage]
   (not (re-find #"(^before-|^after-)" (name stage))))
 
@@ -615,11 +618,10 @@
 (defn validate-with-malli
   "helper function for validating component instances with malli if a schema is
   present."
-  [_ instance-val {:keys [->validation ::current-resolved-component]}]
-  (let [{:keys [schema]} current-resolved-component]
-    (some-> (and schema (m/explain schema instance-val))
+  [{:keys [::instance ->validation ::system]}]
+  (let [{:keys [::schema]} (::current-resolved-component system)]
+    (some-> (and schema (m/explain schema instance))
             ->validation)))
-
 ;;---
 ;;; subsystems
 ;;---
@@ -672,8 +674,9 @@
 
 (defn- forward-start-signal
   [signal-name]
-  (fn [_ _ {:keys [->instance ::current-resolved-component]}]
-    (-> current-resolved-component
+  (fn [{:keys [->instance ::system]}]
+    (-> system
+        ::current-resolved-component
         ::subsystem
         (signal signal-name)
         ->instance
@@ -681,7 +684,7 @@
 
 (defn- forward-signal
   [signal-name]
-  (fn [_ instance {:keys [->instance]}]
+  (fn [{:keys [::instance ->instance]}]
     (-> instance
         (signal signal-name)
         ->instance
