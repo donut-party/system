@@ -197,21 +197,22 @@ stack printer again:
 ``` clojure
 (def system
   {::ds/defs
-   {:services {:stack {:start (fn [{:keys [items]} _ _]
-                                (atom (vec (range items))))
-                       :stop  (fn [_ instance _] (reset! instance []))
-                       :conf  {:items 10}}}
-    :app      {:printer {:start (fn [{:keys [stack]} _ _]
-                                  (doto (Thread.
-                                         (fn []
-                                           (prn "peek:" (peek @stack))
-                                           (swap! stack pop)
-                                           (Thread/sleep 1000)
-                                           (recur)))
-                                    (.start)))
-                         :stop  (fn [_ instance _]
-                                  (.interrupt instance))
-                         :conf  {:stack (ds/ref [:services :stack])}}}}})
+   {:services {:stack #::ds{:start  (fn [{:keys [items]}]
+                                      (atom (vec (range items))))
+                            :stop   (fn [{:keys [::ds/instance]}]
+                                      (reset! instance []))
+                            :config {:items 10}}}
+    :app      {:printer #::ds{:start  (fn [{:keys [stack]}]
+                                        (doto (Thread.
+                                               (fn []
+                                                 (prn "peek:" (peek @stack))
+                                                 (swap! stack pop)
+                                                 (Thread/sleep 1000)
+                                                 (recur)))
+                                          (.start)))
+                              :stop   (fn [{:keys [::ds/instance]}]
+                                        (.interrupt instance))
+                              :config {:stack (ds/ref [:services :stack])}}}}})
 ```
 
 The last line includes `:stack (ds/ref [:services :stack])`. `ds/ref` is a
@@ -229,9 +230,9 @@ gets created by `:stack`'s `:start` signal handler.
 
 ### Constant instances
 
-Component defs don't have to be maps. If you use a non-map value, that value is
-considered to be the component's instance. This can be useful for configuration.
-Consider this system:
+If a component is defined using any value other than a map that contains the
+`:donut.system/start` key, that value is considered to be the component's
+instance. This can be useful for configuration. Consider this system:
 
 ``` clojure
 (ns donut.examples.ring
@@ -241,17 +242,18 @@ Consider this system:
 (def system
   {::ds/defs
    {:env  {:http-port 8080}
-    :http {:server  {:start (fn [{:keys [handler options]} _ _]
-                                (rj/run-jetty handler options))
-                     :stop  (fn [_ instance _]
-                                (.stop instance))
-                     :conf  {:handler (ds/ref :handler)
-                             :options {:port  (ds/ref [:env :http-port])
-                                       :join? false}}}
+    :http {:server  #::ds{:start  (fn [{:keys [handler options]}]
+                                    (rj/run-jetty handler options))
+                          :stop   (fn [{:keys [::ds/instance]}]
+                                    (.stop instance))
+                          :config {:handler (ds/ref :handler)
+                                   :options {:port  (ds/ref [:env :http-port])
+                                             :join? false}}}
            :handler (fn [_req]
                       {:status  200
                        :headers {"ContentType" "text/html"}
                        :body    "It's donut.system, baby!"})}}})
+
 ```
 
 The component `[:env :http-port]` is defined as the value `8080`. It's referred
@@ -265,7 +267,7 @@ It would be annoying and possibly confusing to have to write something like
 ``` clojure
 (def system
   {::ds/defs
-   {:env {:http-port {:start (constantly 8080)}}}})
+   {:env {:http-port #::ds{:start (constantly 8080)}}}})
 ```
 
 ### Signals
@@ -284,7 +286,7 @@ something were getting sent, that shouldn't matter to you in using the library;
 it would be an implementation detail that should be transparent to you.
 
 donut.system provides some sugar for built-in signals: instead of calling
-`(ds/signal system :start)` you can call `(ds/start system)`.
+`(ds/signal system ::ds/start)` you can call `(ds/start system)`.
 
 ### Custom signals
 
