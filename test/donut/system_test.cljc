@@ -7,6 +7,10 @@
             [loom.alg :as la])
   (:import [clojure.lang ExceptionInfo]))
 
+(defn config-port
+  [opts]
+  (get-in opts [::ds/config :port]))
+
 (deftest merge-base-test
   (is (= #::ds{:base {:before-start [:foo]}
                :defs {:app {:http-server {:before-start [:foo]
@@ -74,7 +78,7 @@
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port #::ds{:start 9090}}
-                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                            :app {:http-server #::ds{:start  config-port
                                                      :config {:port (ds/ref [:env :http-port])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
@@ -84,7 +88,7 @@
     (is (= #::ds{:instances {:env {:http {:port 9090}}
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http {:port 9090}}
-                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                            :app {:http-server #::ds{:start  config-port
                                                      ;; [:env :http :port] reaches into the :http "component"
                                                      :config {:port (ds/ref [:env :http :port])}}}}}
                (ds/signal ::ds/start)
@@ -94,7 +98,7 @@
   (testing "ref of keyword resolves to component in same group"
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}}
-           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+           (-> #::ds{:defs {:app {:http-server #::ds{:start  config-port
                                                      :config {:port (ds/ref :http-port)}}
                                   :http-port   9090}}}
                (ds/signal ::ds/start)
@@ -108,7 +112,7 @@
                                                  :timeout   5000}}}}
            (-> #::ds{:defs {:env {:http-port #::ds{:start 9090}
                                   :timeout   #::ds{:start 5000}}
-                            :app {:http-server #::ds{:start  (fn [{:keys [env]}] env)
+                            :app {:http-server #::ds{:start  (fn [opts] (get-in opts [::ds/config :env]))
                                                      :config {:env (ds/group-ref :env)}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
@@ -119,7 +123,7 @@
     (is (= #::ds{:instances {:env {:http-port 9090}
                              :app {:http-server 9090}}}
            (-> #::ds{:defs {:env {:http-port 9090}
-                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                            :app {:http-server #::ds{:start  config-port
                                                      :config {:port (ds/ref [:env :http-port])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
@@ -136,7 +140,7 @@
 
                      :defs {:env {:http-port #::ds{:start  "9090"
                                                    :schema schema}}
-                            :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                            :app {:http-server #::ds{:start  config-port
                                                      :config {:port (ds/ref [:env :http-port])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/out]))))))
@@ -145,7 +149,7 @@
   (let [expected #::ds{:instances {:env {:http-port 9090}
                                    :app {:http-server 9090}}}
         system   #::ds{:defs {:env {:http-port #::ds{:start 9090}}
-                              :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                              :app {:http-server #::ds{:start  config-port
                                                        :config {:port (ds/ref [:env :http-port])}}}}}]
     (is (= expected
            (->  system
@@ -177,8 +181,8 @@
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}
                  :out       {:info {:app {:http-server "info"}}}}
-           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [port ->instance ->info]}]
-                                                               (-> (->instance port)
+           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [::ds/config ->instance ->info]}]
+                                                               (-> (->instance (:port config))
                                                                    (->info "info")))
                                                      :config {:port (ds/ref :http-port)}}
                                   :http-port   9090}}}
@@ -190,8 +194,7 @@
                         {:local {:port 9090}
 
                          :app
-                         {:server #::ds{:start       (fn [config]
-                                                       (select-keys config [:job-queue :db :port]))
+                         {:server #::ds{:start       (fn [{:keys [::ds/config]}] config)
                                         :after-start (fn [{:keys [->info]}]
                                                        (->info "started"))
                                         :stop        (fn [{:keys [::ds/instance]}]
@@ -245,7 +248,7 @@
 (deftest select-components-test
   (testing "if you specify components, the union of their subgraphs is used"
     (let [system-def {::ds/defs {:env {:http-port #::ds{:start 9090}}
-                                 :app {:http-server #::ds{:start  (fn [{:keys [port]}] port)
+                                 :app {:http-server #::ds{:start  config-port
                                                           :stop   "stopped http-server"
                                                           :config {:port (ds/ref [:env :http-port])}}
                                        :db          #::ds{:start "db"

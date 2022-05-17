@@ -425,10 +425,12 @@
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
-  (stage-fn (merge {::instance (sp/select-one [::instances component-id] system)
-                    ::system   (merge system (channel-fns system component-id))}
-                   (sp/select-one [::resolved-defs component-id ::config] system)
-                   (channel-fns system component-id))))
+  (let [resolved-def (sp/select-one [::resolved-defs component-id] system)]
+    (stage-fn (cond-> {::instance (sp/select-one [::instances component-id] system)
+                       ::system   system
+                       ::config   (sp/select-one [::resolved-defs component-id] system)}
+                (map? resolved-def) (merge resolved-def)
+                true                (merge (channel-fns system component-id))))))
 
 (defn- stage-result-valid?
   [system]
