@@ -18,17 +18,16 @@
          (#'ds/merge-base #::ds{:base {:before-start [:foo]}
                                 :defs {:app {:http-server {:after-start [:bar]}}}})))
 
-  (is (= #::ds{:base {:before-start [:foo]}
-               :defs {:app {:http-server {:before-start [:foo]
-                                          :start        [:bar]}}}}
-         (#'ds/merge-base #::ds{:base {:before-start [:foo]}
-                                :defs {:app {:http-server [:bar]}}}))))
+  (is (= [:foo]
+         (get-in (#'ds/merge-base #::ds{:base {:before-start [:foo]}
+                                        :defs {:app {:http-server [:bar]}}})
+                 [::ds/defs :app :http-server :before-start]))))
 
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
                       :app {:http-server {:port (ds/ref [:env :http-port])}}}}
          (#'ds/expand-refs-for-graph
-          #::ds{:defs {:env {:http-port {:x (ds/ref :bar)}}
+          #::ds{:defs {:env {:http-port {:x (ds/local-ref [:bar])}}
                        :app {:http-server {:port (ds/ref [:env :http-port])}}}}))))
 
 (deftest resolve-refs-test
@@ -42,13 +41,13 @@
 (deftest ref-edges-test
   (is (= [[[:env :http-port] [:env :bar]]
           [[:app :http-server] [:env :http-port]]]
-         (#'ds/ref-edges #::ds{:defs {:env {:http-port {:deps {:x (ds/ref :bar)}}}
+         (#'ds/ref-edges #::ds{:defs {:env {:http-port {:deps {:x (ds/local-ref [:bar])}}}
                                       :app {:http-server {:deps {:port (ds/ref [:env :http-port])}}}}}
                          :topsort))))
 
 (deftest gen-graphs-test
   (let [system (ds/gen-graphs #::ds{:defs {:env {:port-source nil
-                                                 :http-port   (ds/ref :port-source)}
+                                                 :http-port   (ds/local-ref [:port-source])}
                                            :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
     (is (= [[:app :http-server]
             [:env :http-port]
@@ -99,7 +98,7 @@
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}}
            (-> #::ds{:defs {:app {:http-server #::ds{:start  config-port
-                                                     :config {:port (ds/ref :http-port)}}
+                                                     :config {:port (ds/local-ref [:http-port])}}
                                   :http-port   9090}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
@@ -113,7 +112,7 @@
            (-> #::ds{:defs {:env {:http-port #::ds{:start 9090}
                                   :timeout   #::ds{:start 5000}}
                             :app {:http-server #::ds{:start  (fn [opts] (get-in opts [::ds/config :env]))
-                                                     :config {:env (ds/group-ref :env)}}}}}
+                                                     :config {:env (ds/ref [:env])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
@@ -184,7 +183,7 @@
            (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [::ds/config ->instance ->info]}]
                                                                (-> (->instance (:port config))
                                                                    (->info "info")))
-                                                     :config {:port (ds/ref :http-port)}}
+                                                     :config {:port (ds/local-ref [:http-port])}}
                                   :http-port   9090}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances ::ds/out]))))))
@@ -221,7 +220,7 @@
                                          (ds/ref [:common-services :db])})
                             :system-2 (ds/subsystem-component
                                        subsystem
-                                       #{(ds/group-ref :common-services)})}}}
+                                       #{(ds/ref [:common-services])})}}}
                     (ds/signal ::ds/start))]
 
     (is (= {:job-queue "job queue"
@@ -274,13 +273,21 @@
   (is (thrown-with-msg?
        ExceptionInfo
        #"Invalid ref"
+       (ds/signal {::ds/defs {:group-a {:foo :foo}
+                              :group-b {:component {:ref-1 (ds/ref [:group-a :foo])
+                                                    :ref-2 (ds/ref [:group-a :nonexistent-component])}}}}
+                  ::ds/start)))
+
+  (is (thrown-with-msg?
+       ExceptionInfo
+       #"Invalid group ref"
        (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent :ref])}}}}
                   ::ds/start)))
 
   (is (thrown-with-msg?
        ExceptionInfo
        #"Invalid group ref"
-       (ds/signal {::ds/defs {:group {:component {:ref (ds/group-ref :nonexistent)}}}}
+       (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent])}}}}
                   ::ds/start))))
 
 (deftest signal-arity-exception-test

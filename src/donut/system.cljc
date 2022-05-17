@@ -81,35 +81,37 @@
 
 
 (def RefKey
-  [:orn
-   [:local-ref keyword?]
-   [:full-ref [:cat keyword? keyword? [:* keyword?]]]])
-(def Ref [:cat [:enum ::ref] RefKey])
+  [:vector {:min 1} keyword?])
 
-(def GroupRefKey keyword?)
-(def GroupRef [:cat [:enum ::group-ref] GroupRefKey])
+(def LocalRef
+  [:catn
+   [:ref-type [:enum ::local-ref]]
+   [:ref-key RefKey]])
+
+(def Ref
+  [:catn
+   [:ref-type [:enum ::ref]]
+   [:ref-key RefKey]])
 
 (def DonutRef
-  [:cat
-   [:orn
-    [:ref Ref]
-    [:group-ref GroupRef]]])
+  [:or Ref LocalRef])
 
 ;;---
 ;;; schema predicates
 ;;---
 
-(def ref? (m/validator Ref))
-(def ref-parser (m/parser Ref))
-(defn ref-type [k]
-  (get-in (ref-parser k) [1 0]))
+(def ref? (m/validator DonutRef))
+(def ref-parser (m/parser DonutRef))
+(def ref-type first)
+
 (defn ref [k] [::ref k])
-
-(def group-ref? (m/validator GroupRef))
-(defn group-ref [x] [::group-ref x])
-
+(defn local-ref [k] [::local-ref k])
 (def ref-key second)
 
+(defn group-ref?
+  [ref]
+  (and (= ::ref (ref-type ref))
+       (= 1 (count (ref-key ref)))))
 
 (def component? (m/validator Component))
 ;;---
@@ -172,13 +174,6 @@
            {:referencing-component-id referencing-component-id
             :referenced-component-id  referenced-component-id}))
 
-(defn- resolve-ref
-  [system referencing-component-id ref]
-  (let [[component-group component-name :as referenced-component-id] (ref-key ref)]
-    (when-not (contains? (sp/select-one [::instances component-group] system) component-name)
-      (throw (ref-exception system referencing-component-id referenced-component-id)))
-    (sp/select-one [::instances referenced-component-id] system)))
-
 (defn group-ref-exception
   [_system referencing-component-id referenced-component-group-name]
   (ex-info (str "Invalid group ref: '" referencing-component-id "' "
@@ -186,18 +181,23 @@
            {:referencing-component-id        referencing-component-id
             :referenced-component-group-name referenced-component-group-name}))
 
-(defn- resolve-group-ref
-  [system referencing-component-id [_ key]]
-  (when-not (contains? (::instances system) key)
-    (throw (group-ref-exception system referencing-component-id key)))
-  (sp/select-one [::instances key] system))
+(defn- resolve-ref
+  [system referencing-component-id ref]
+  (let [[component-group-name component-name :as referenced-component-id] (ref-key ref)
+        component-group (sp/select-one [::instances component-group-name] system)]
+    (when-not component-group
+      (throw (group-ref-exception system referenced-component-id component-group-name)))
+    (when (and component-name
+               (not (contains? (sp/select-one [::instances component-group-name] system) component-name)))
+      (throw (ref-exception system referencing-component-id referenced-component-id)))
+    (sp/select-one [::instances referenced-component-id] system)))
 
 (defn- default-resolve-refs
   [system component-id]
   (->> system
        (sp/setval [::resolved-defs component-id]
                   (sp/select-one [::defs component-id] system))
-       (sp/transform [::resolved-defs component-id (sp/walker (some-fn ref? group-ref? system?))]
+       (sp/transform [::resolved-defs component-id (sp/walker (some-fn ref? system?))]
                      (fn [ref-or-system]
                        (let [rt (ref-type ref-or-system)]
                          (cond
@@ -205,15 +205,12 @@
                            (system? ref-or-system)
                            ref-or-system
 
-                           (group-ref? ref-or-system)
-                           (resolve-group-ref system component-id ref-or-system)
-
-                           (= :full-ref rt)
+                           (= ::ref rt)
                            (resolve-ref system component-id ref-or-system)
 
                            ;; local refs
-                           (= :local-ref rt)
-                           (resolve-ref system component-id (ref [(first component-id) (ref-key ref-or-system)]))))))))
+                           (= ::local-ref rt)
+                           (resolve-ref system component-id (ref (into [(first component-id)] (ref-key ref-or-system))))))))))
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
@@ -257,7 +254,7 @@
   local refs -- (ref :component-name) -- or group refs
   -- (group-ref :group-name). This function desugars both kinds of refs. "
   [system]
-  (sp/transform [config-collect-group-path (sp/walker (some-fn ref? group-ref? system?))]
+  (sp/transform [config-collect-group-path (sp/walker (some-fn ref? system?))]
                 (fn [group-name x]
                   (let [rt (ref-type x)]
                     (cond
@@ -266,17 +263,17 @@
                       x
 
                       (group-ref? x)
-                      (let [group-name (ref-key x)]
+                      (let [group-name (first (ref-key x))]
                         {group-name
                          (->> (sp/select [::defs group-name sp/MAP-KEYS] system)
                               (reduce (fn [group-map k]
                                         (assoc group-map k (ref [group-name k])))
                                       {}))})
 
-                      (= :local-ref rt)
-                      (ref [group-name (ref-key x)])
+                      (= ::local-ref rt)
+                      (ref (into [group-name] (ref-key x)))
 
-                      (= :full-ref rt)
+                      (= ::ref rt)
                       x)))
                 system))
 
