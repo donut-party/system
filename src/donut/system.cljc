@@ -149,7 +149,7 @@
 (defn base-merge
   [component-def base]
   (cond (and (map? base) (map? component-def)) (merge base component-def)
-        (map? base)                            (merge base {:start component-def})
+        (map? base)                            (merge base {::start (constantly component-def)})
         :else                                  (or base component-def)))
 
 (defn- merge-base
