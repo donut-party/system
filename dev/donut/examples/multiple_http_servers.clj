@@ -5,13 +5,14 @@
 
 
 (def HTTPServer
-  #::ds{:start (fn [{:keys [handler options]}]
-                 (rj/run-jetty handler options))
-        :stop  (fn [{:keys [::ds/instance]}]
-                 (.stop instance))
-        :conf  {:handler (ds/ref :handler)
-                :options {:port  (ds/ref :port)
-                          :join? false}}})
+  #::ds{:start  (fn [{:keys [::ds/config]}]
+                  (let [{:keys [handler options]} config]
+                    (rj/run-jetty handler options)))
+        :stop   (fn [{:keys [::ds/instance]}]
+                  (.stop instance))
+        :config {:handler (ds/local-ref [:handler])
+                 :options {:port  (ds/local-ref [:port])
+                           :join? false}}})
 
 (def system
   {::ds/defs
@@ -20,11 +21,11 @@
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 1"})
-             :conf    {:port 8080}}
+             :port    8080}
 
     :http-2 {:server  HTTPServer
              :handler (fn [_req]
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 2"})
-             :conf    {:port 9090}}}})
+             :port    9090}}})

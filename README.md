@@ -73,19 +73,20 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{:keys [items]}]
-                                      (atom (vec (range items))))
+   {:services {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
+                                      (atom (vec (range (:items config)))))
                             :stop   (fn [{:keys [::ds/instance]}]
                                       (reset! instance []))
                             :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{:keys [stack]}]
-                                        (doto (Thread.
-                                               (fn []
-                                                 (prn "peek:" (peek @stack))
-                                                 (swap! stack pop)
-                                                 (Thread/sleep 1000)
-                                                 (recur)))
-                                          (.start)))
+    :app      {:printer #::ds{:start  (fn [{:keys [::ds/config]}]
+                                        (let [{:keys [stack]} config]
+                                          (doto (Thread.
+                                                 (fn []
+                                                   (prn "peek:" (peek @stack))
+                                                   (swap! stack pop)
+                                                   (Thread/sleep 1000)
+                                                   (recur)))
+                                            (.start))))
                               :stop   (fn [{:keys [::ds/instance]}]
                                         (.interrupt instance))
                               :config {:stack (ds/ref [:services :stack])}}}}})
@@ -126,7 +127,7 @@ this system with a single component definition shows:
 
 ``` clojure
 (def Stack
-  #::ds{:start  (fn [{:keys [items]}] (atom (vec (range items))))
+  #::ds{:start  (fn [{:keys [::ds/config]}] (atom (vec (range (:items config)))))
         :stop   (fn [{:keys [::ds/instance]}] (reset! instance []))
         :config {:items 10}})
 
@@ -146,16 +147,17 @@ _instances_ and implement component behavior. A def can also contain additional
 configuration values that will get passed to the signal handlers.
 
 In the example above, we've defined `::ds/start` and `::ds/stop` signal
-handlers. Signal handlers are just functions with one argument, a map. How is
-this map constructed?
+handlers. Signal handlers are just functions with one argument, a map. What is
+included in this map?
 
-The value of your component's `::ds/config` is used as the starting point. In
-the example above, that means that the map will contain `{:items 10}`. (This
-also implies that `::ds/config` must be a map.) You can see that the
-`::ds/start` signal handler destructures `items` out of its first argument.
+This map includes the key `::ds/config`, and its value is taken from the
+`::ds/config` key in your component definition. In the example above, that means
+that the map will contain `{:items 10}`. You can see that the `::ds/start`
+signal handler destructures `::ds/config` out of its first argument, and then
+looks up `:items`.
 
-(Other key/value pairs get added to this map, and I'll cover those as we need
-them.)
+(Other key/value pairs get added to the signal handler's map, and I'll cover
+those as we need them.)
 
 This approach to defining components lets us easily modify them. If you want to
 mock out a component, you just have to use `assoc-in` to assign a new
@@ -170,9 +172,9 @@ under `::ds/instances`. Try this to see a system's instances:
 
 Component instances are added to the signal handler's argument under the
 `::ds/instance` key. When you apply the `::ds/start` signal to a `Stack`
-component, it creates a new atom, and when you `::ds/stop` it the atom is passed
-in under `::ds/instance` key. In the example above, the `::ds/stop` signal
-handler destructures this:
+component, it creates a new atom, and when you apply the `::ds/stop` handler the
+atom is passed in under `::ds/instance` key. In the example above, the
+`::ds/stop` signal handler destructures this:
 
 ``` clojure
 (fn [{:keys [::ds/instance]}] (reset! instance []))
@@ -181,8 +183,9 @@ handler destructures this:
 This is how you can allocate and deallocate the resources needed for your
 system: the `::ds/start` handler will create a new object or connection or
 thread pool or whatever, and place that in the system map under
-`::ds/instances`. The instance is passed to the `::ds/stop` handler, which can
-call whatever functions or methods are needed to to deallocate the resource.
+`::ds/instances`. The `::ds/stop` handler can retrieve this instance, and it can
+then call whatever functions or methods are needed to to deallocate the
+resource.
 
 You don't have to define a handler for every signal. Components that don't have
 a handler for a signal are essentially skipped when you send a signal to a
@@ -197,19 +200,20 @@ stack printer again:
 ``` clojure
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{:keys [items]}]
-                                      (atom (vec (range items))))
+   {:services {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
+                                      (atom (vec (range (:items config)))))
                             :stop   (fn [{:keys [::ds/instance]}]
                                       (reset! instance []))
                             :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{:keys [stack]}]
-                                        (doto (Thread.
-                                               (fn []
-                                                 (prn "peek:" (peek @stack))
-                                                 (swap! stack pop)
-                                                 (Thread/sleep 1000)
-                                                 (recur)))
-                                          (.start)))
+    :app      {:printer #::ds{:start  (fn [{:keys [::ds/config]}]
+                                        (let [{:keys [stack]} config]
+                                          (doto (Thread.
+                                                 (fn []
+                                                   (prn "peek:" (peek @stack))
+                                                   (swap! stack pop)
+                                                   (Thread/sleep 1000)
+                                                   (recur)))
+                                            (.start))))
                               :stop   (fn [{:keys [::ds/instance]}]
                                         (.interrupt instance))
                               :config {:stack (ds/ref [:services :stack])}}}}})
@@ -224,9 +228,8 @@ components. Since the `:printer` refers to the `:stack`, we know that it depends
 on a `:stack` instance to function correctly. Therefore, when we send a
 `:start` signal, it's handled by `:stack` before `:printer.`
 
-The `:printer` component's `:start` signal handle destructures `stack` from its
-first argument. Its value is the `:stack` component's instance, the atom that
-gets created by `:stack`'s `:start` signal handler.
+Within `:printer`'s `:start` signal handler, `stack` refers to the atom created
+by the `:stack` component.
 
 ### Constant instances
 
@@ -242,18 +245,18 @@ instance. This can be useful for configuration. Consider this system:
 (def system
   {::ds/defs
    {:env  {:http-port 8080}
-    :http {:server  #::ds{:start  (fn [{:keys [handler options]}]
-                                    (rj/run-jetty handler options))
+    :http {:server  #::ds{:start  (fn [{:keys [::ds/config]}]
+                                    (let [{:keys [handler options]} config]
+                                      (rj/run-jetty handler options)))
                           :stop   (fn [{:keys [::ds/instance]}]
                                     (.stop instance))
-                          :config {:handler (ds/ref :handler)
+                          :config {:handler (ds/local-ref [:handler])
                                    :options {:port  (ds/ref [:env :http-port])
                                              :join? false}}}
            :handler (fn [_req]
                       {:status  200
                        :headers {"ContentType" "text/html"}
                        :body    "It's donut.system, baby!"})}}})
-
 ```
 
 The component `[:env :http-port]` is defined as the value `8080`. It's referred
@@ -370,7 +373,7 @@ You don't have to override an entire component. You can also override just a
 signal handler:
 
 ``` clojure
-(ds/system :test {[:services :queue ::ds/start] (fn mock-start-queue [conf _ _])})
+(ds/system :test {[:services :queue ::ds/start] (fn mock-start-queue [_])})
 ```
 
 Overrides are a map where keys are _def paths_, and values are whatever value
@@ -384,7 +387,7 @@ equivalent to this:
           (reduce-kv (fn [new-defs path val]
                        (assoc-in new-defs path val))
                      defs
-                     {[:services :queue :start] (fn mock-start-queue [conf _ _])})))
+                     {[:services :queue :start] (fn mock-start-queue [_])})))
 ```
 
 The signal helpers `ds/start`, `ds/stop`, `ds/suspend`, and `ds/resume` can take
@@ -406,6 +409,8 @@ The `start` helper also takes an optional third argument to select components:
           #{[:app :http-server]} ;; <- component selection
           )
 ```
+
+Component selection is explained below.
 
 ### Reloaded REPL workflow
 
@@ -544,13 +549,14 @@ could do that:
 
 
 (def HTTPServer
-  #::ds{:start (fn [{:keys [handler options]}]
-                 (rj/run-jetty handler options))
-        :stop  (fn [{:keys [::ds/instance]}]
-                 (.stop instance))
-        :conf  {:handler (ds/ref :handler)
-                :options {:port  (ds/ref :port)
-                          :join? false}}})
+  #::ds{:start  (fn [{:keys [::ds/config]}]
+                  (let [{:keys [handler options]} config]
+                    (rj/run-jetty handler options)))
+        :stop   (fn [{:keys [::ds/instance]}]
+                  (.stop instance))
+        :config {:handler (ds/local-ref [:handler])
+                 :options {:port  (ds/local-ref [:port])
+                           :join? false}}})
 
 (def system
   {::ds/defs
@@ -559,21 +565,21 @@ could do that:
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 1"})
-             :conf    {:port 8080}}
+             :port    8080}
 
     :http-2 {:server  HTTPServer
              :handler (fn [_req]
                         {:status  200
                          :headers {"ContentType" "text/html"}
                          :body    "http server 2"})
-             :conf    {:port 9090}}}})
+             :port    9090}}})
 ```
 
 First, we define the component `HTTPServer`. Notice that it has two refs,
-`(ds/ref :handler)` and `(ds/ref :port)`. These differ from the refs you've seen
-so far, which have been tuples of `[group-name component-name]`. Refs of the
-form `(ds/ref component-name)` are _local refs_, and will resolve to the
-component of the given name within the same group.
+`(ds/local-ref [:handler])` and `(ds/local-ref [:port])`. These differ from the
+refs you've seen so far, which have been created with `ds/ref`. Refs created
+with `ds/local-ref` are, well, _local refs_, and will resolve to the component
+of the given name within the same group.
 
 This little sprinkling of abstraction creates more possibilities for component
 modularity and reuse. You could create multiple instances of an HTTP server
@@ -638,7 +644,7 @@ already-started component should not create a new instance but use an existing
 one. The code would look something like this:
 
 ``` clojure
-(fn [config instance _]
+(fn [{:keys [::ds/config ::ds/instance]}]
   (or instance
       (create-logger config)))
 ```
@@ -842,7 +848,7 @@ do, I've tried to make it straightforward. Check it out:
                             :stop  (fn [{:keys [::ds/instance]}] (reset! instance []))}}
     :printers {:printer-1 (ds/subsystem-component
                            (print-worker-system ":printer-1")
-                           #{(ds/group-ref :services)})
+                           #{(ds/ref [:services])})
                :printer-2 (ds/subsystem-component
                            (print-worker-system ":printer-2")
                            #{(ds/ref [:services :stack])})}}})

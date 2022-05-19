@@ -27,7 +27,7 @@
                             :stop  (fn [{:keys [::ds/instance]}] (reset! instance []))}}
     :printers {:printer-1 (ds/subsystem-component
                            (print-worker-system ":printer-1")
-                           #{(ds/group-ref :services)})
+                           #{(ds/ref [:services])})
                :printer-2 (ds/subsystem-component
                            (print-worker-system ":printer-2")
                            #{(ds/ref [:services :stack])})}}})

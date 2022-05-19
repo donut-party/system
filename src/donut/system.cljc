@@ -628,12 +628,12 @@
 
 (defn- mapify-imports
   "Subsystems can 'import' instances from the parent system. Imports are specified
-  as a set of refs; this converts that to a `ComponentGroups`` so that it can be
+  as a set of refs; this converts that to a `ComponentGroups` so that it can be
   merged into subsystem's ::instances, thus making the parent instances
   available for ref resolution."
   [imports]
   (reduce (fn [refmap ref]
-            (sp/setval [(:key ref)] ref refmap))
+            (sp/setval [(ref-key ref)] ref refmap))
           {}
           imports))
 
