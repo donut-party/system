@@ -180,7 +180,7 @@
     (is (= #::ds{:instances {:app {:http-server 9090
                                    :http-port   9090}}
                  :out       {:info {:app {:http-server "info"}}}}
-           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [::ds/config ->instance ->info]}]
+           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [::ds/config ->instance ->info]} _]
                                                                (-> (->instance (:port config))
                                                                    (->info "info")))
                                                      :config {:port (ds/local-ref [:http-port])}}

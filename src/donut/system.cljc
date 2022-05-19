@@ -340,14 +340,11 @@
 ;;---
 
 (defn- apply-signal-exception
-  [system computation-stage t]
+  [_system computation-stage t]
   (ex-info (str "Error on " computation-stage " when applying signal")
-           {:reason   ::apply-signal-exception
-            :stage    computation-stage
-            :resolved (sp/select-one [::resolved-defs (take 2 computation-stage)]
-                                     system)
-            :instance (sp/select-one [::instances (take 2 computation-stage)]
-                                     system)}
+           {:component      (vec (take 2 computation-stage))
+            :signal-handler (last computation-stage)
+            :message        (.getMessage t)}
            t))
 
 (defn- handler-lifecycle-names
