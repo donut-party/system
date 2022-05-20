@@ -91,7 +91,19 @@
                                                      ;; [:env :http :port] reaches into the :http "component"
                                                      :config {:port (ds/ref [:env :http :port])}}}}}
                (ds/signal ::ds/start)
-               (select-keys [::ds/instances]))))))
+               (select-keys [::ds/instances])))))
+  (testing "components with deep refs are started in the correct order"
+    (let [vref-comp (fn [comp-name]
+                      #::ds{:config {:ref (ds/ref [:group comp-name :v])}
+                            :start (fn [{{ref :ref} ::ds/config}]
+                                     {:v ref})})]
+      (is (= #::ds{:instances {:group {:c1 {:v :x} :c2 {:v :x} :c3 {:v :x} :c4 {:v :x}}}}
+             (-> #::ds{:defs {:group {:c1 {:v :x}
+                                      :c2 (vref-comp :c4)
+                                      :c3 (vref-comp :c2)
+                                      :c4 (vref-comp :c1)}}}
+                 (ds/signal ::ds/start)
+                 (select-keys [::ds/instances])))))))
 
 (deftest local-ref-test
   (testing "ref of keyword resolves to component in same group"

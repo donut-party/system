@@ -113,6 +113,12 @@
   (and (= ::ref (ref-type ref))
        (= 1 (count (ref-key ref)))))
 
+(defn component-id [ref]
+  (->> ref
+       ref-key
+       (take 2)
+       vec))
+
 (def component? (m/validator Component))
 ;;---
 ;;; util/ helpers / misc
@@ -183,14 +189,14 @@
 
 (defn- resolve-ref
   [system referencing-component-id ref]
-  (let [[component-group-name component-name :as referenced-component-id] (ref-key ref)
+  (let [[component-group-name component-name :as rkey] (ref-key ref)
         component-group (sp/select-one [::instances component-group-name] system)]
     (when-not component-group
-      (throw (group-ref-exception system referenced-component-id component-group-name)))
+      (throw (group-ref-exception system (component-id ref) component-group-name)))
     (when (and component-name
                (not (contains? (sp/select-one [::instances component-group-name] system) component-name)))
-      (throw (ref-exception system referencing-component-id referenced-component-id)))
-    (sp/select-one [::instances referenced-component-id] system)))
+      (throw (ref-exception system referencing-component-id (component-id ref))))
+    (sp/select-one [::instances rkey] system)))
 
 (defn- default-resolve-refs
   [system component-id]
@@ -285,13 +291,12 @@
                    sp/ALL
                    (sp/collect-one sp/FIRST)
                    sp/LAST
-                   (sp/walker ref?)
-                   ref-key])
+                   (sp/walker ref?)])
        (map (fn [[group-name component-name ref]]
               (if (= :topsort direction)
                 [[group-name component-name]
-                 (ref-key ref)]
-                [(ref-key ref)
+                 (component-id ref)]
+                [(component-id ref)
                  [group-name component-name]])))))
 
 (defn- component-graph-add-edges
