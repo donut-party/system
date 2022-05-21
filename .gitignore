@@ -8,5 +8,6 @@
 .lein-repl-history
 .lsp
 .nrepl*
+cljs-test-runner-out
 scratch.clj
 target

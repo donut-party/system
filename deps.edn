@@ -6,14 +6,22 @@
          medley/medley       {:mvn/version "1.3.0"}}
 
  :aliases
- {:dev   {:extra-deps  {ring/ring {:mvn/version "1.9.4"}}
-          :extra-paths ["dev" "test"]}
-  :test  {:extra-paths ["test"]
-          :extra-deps  {io.github.cognitect-labs/test-runner
-                        {:git/tag "v0.5.0" :git/sha "48c3c67"}}
-          :exec-fn     cognitect.test-runner.api/test}
-  :cljs  {:extra-deps {olical/cljs-test-runner {:mvn/version "3.8.0"}}
-          :main-opts  ["-m" "cljs-test-runner.main"]}
+ {:dev
+  {:extra-deps  {ring/ring {:mvn/version "1.9.4"}}
+   :extra-paths ["dev" "test"]}
+
+  :test
+  {:extra-paths ["test"]
+   :extra-deps  {io.github.cognitect-labs/test-runner
+                 {:git/tag "v0.5.0" :git/sha "48c3c67"}}
+   :exec-fn     cognitect.test-runner.api/test}
+
+  :test-cljs
+  {:extra-paths ["test"]
+   :extra-deps  {org.clojure/test.check  {:mvn/version "0.9.0"}
+                 olical/cljs-test-runner {:mvn/version "3.8.0"}}
+   :exec-fn     cljs-test-runner.main/-main}
+
   :build {:deps       {io.github.seancorfield/build-clj
                        {:git/tag "v0.6.6" :git/sha "171d5f1"}}
           :ns-default build}}}

@@ -1,11 +1,11 @@
 (ns donut.system-test
-  (:require [donut.system :as ds]
-            [loom.graph :as lg]
-            #?(:clj [clojure.test :refer [deftest is testing]]
-               :cljs [cljs.test :refer [deftest is testing] :include-macros true])
-            [malli.core :as m]
-            [loom.alg :as la])
-  (:import [clojure.lang ExceptionInfo]))
+  (:require
+   #?(:clj [clojure.test :refer [deftest is testing]]
+      :cljs [cljs.test :refer [deftest is testing] :include-macros true])
+   [donut.system :as ds]
+   [loom.alg :as la]
+   [loom.graph :as lg]
+   [malli.core :as m]))
 
 (defn config-port
   [opts]
@@ -271,7 +271,8 @@
 
 (deftest ref-undefined-test
   (is (thrown-with-msg?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        #"Invalid ref"
        (ds/signal {::ds/defs {:group-a {:foo :foo}
                               :group-b {:component {:ref-1 (ds/ref [:group-a :foo])
@@ -279,20 +280,23 @@
                   ::ds/start)))
 
   (is (thrown-with-msg?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        #"Invalid group ref"
        (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent :ref])}}}}
                   ::ds/start)))
 
   (is (thrown-with-msg?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        #"Invalid group ref"
        (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent])}}}}
                   ::ds/start))))
 
 (deftest signal-arity-exception-test
   (is (thrown?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        (ds/signal {::ds/defs {:group {:component #::ds{:start (fn [])}}}}
                   ::ds/start))))
 
@@ -347,7 +351,8 @@
 
 (deftest recognized-signals-exception-test
   (is (thrown-with-msg?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        #"Signal :foo is not recognized"
        (ds/signal {::ds/defs {:group {:component "constant"}}}
                   :foo)))
@@ -359,6 +364,7 @@
 
 (deftest required-component
   (is (thrown?
-       ExceptionInfo
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
        (ds/signal {::ds/defs {:group {:component ds/required-component}}}
                   ::ds/start))))
