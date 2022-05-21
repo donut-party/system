@@ -344,7 +344,8 @@
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:component      (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
-            :message        (.getMessage t)}
+            :message        #?(:clj (.getMessage t)
+                               :cljs (. t -message))}
            t))
 
 (defn- handler-lifecycle-names

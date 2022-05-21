@@ -293,13 +293,6 @@
        (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent])}}}}
                   ::ds/start))))
 
-(deftest signal-arity-exception-test
-  (is (thrown?
-       #?(:clj clojure.lang.ExceptionInfo
-          :cljs js/Object)
-       (ds/signal {::ds/defs {:group {:component #::ds{:start (fn [])}}}}
-                  ::ds/start))))
-
 (defmethod ds/named-system ::system-config-test
   [_]
   {::ds/defs {:group {:component-a 1
