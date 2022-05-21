@@ -1,0 +1,53 @@
+version: 2
+jobs:
+  test-and-build:
+    environment:
+      - _JAVA_OPTIONS: "-Xms512m -Xmx1024m"
+    docker:
+      - image: circleci/clojure:openjdk-8-tools-deps-buster-node
+    steps:
+      - checkout
+      - run:
+          name: test clj
+          command: clojure -X:test
+      - run:
+          name: test cljs
+          command: clojure -X:test-cljs
+      - run:
+          name: Build
+          command: clojure -T:build jar
+      - save-cache:
+          paths:
+            - ~/bin
+            - ~/.m2
+          key: system-{{ checksum "build.clj" }}
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - ./
+  deploy:
+    docker:
+      - image: circleci/clojure:openjdk-8-tools-deps-buster-node
+    steps:
+      - checkout
+      - restore_cache:
+          key: system-{{ checksum "build.clj" }}
+      - attach_workspace:
+          at: ./
+      - run:
+          name: Deploy to clojars
+          command: |
+            clojure -T:build deploy
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+      - test-and-build
+      - deploy:
+          filters:
+            branches:
+              only:
+                - main
+          requires:
+            - test-and-build
