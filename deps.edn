@@ -22,6 +22,7 @@
                  olical/cljs-test-runner {:mvn/version "3.8.0"}}
    :exec-fn     cljs-test-runner.main/-main}
 
-  :build {:deps       {io.github.seancorfield/build-clj
-                       {:git/tag "v0.6.6" :git/sha "171d5f1"}}
-          :ns-default build}}}
+  :build
+  {:deps       {io.github.seancorfield/build-clj
+                {:git/tag "v0.6.6" :git/sha "171d5f1"}}
+   :ns-default build}}}

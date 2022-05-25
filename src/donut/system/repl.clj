@@ -14,14 +14,14 @@
   [& args]
   (alter-var-root #'state/system (fn [sys]
                                    (when (and (ds/system? sys)
-                                              (not= :stop (::ds/last-signal sys)))
+                                              (not= ::ds/stop (::ds/last-signal sys)))
                                      (ds/stop sys))
                                    (apply ds/start :donut.system/repl args)))
-  :start)
+  ::ds/start)
 
 (defn stop
   []
-  (signal :stop))
+  (signal ::ds/stop))
 
 (defn restart
   []
