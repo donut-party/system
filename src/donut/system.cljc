@@ -101,7 +101,6 @@
 ;;---
 
 (def ref? (m/validator DonutRef))
-(def ref-parser (m/parser DonutRef))
 (def ref-type first)
 
 (defn ref [k] [::ref k])
@@ -144,7 +143,7 @@
 ;;; merge base
 ;;---
 
-(defn component-paths
+(defn- component-paths
   [defs]
   (reduce-kv (fn [ps group-name components]
                (reduce (fn [ps component-name]
@@ -154,7 +153,8 @@
              #{}
              defs))
 
-(defn base-merge
+(defn- base-merge
+  "handles merging a system base when a component is a constant"
   [component-def base]
   (cond (and (map? base) (map? component-def)) (merge base component-def)
         (map? base)                            (merge base {::start (constantly component-def)})
@@ -189,16 +189,23 @@
 
 (defn- resolve-ref
   [system referencing-component-id ref]
-  (let [[component-group-name component-name :as rkey] (ref-key ref)
-        component-group (sp/select-one [::instances component-group-name] system)]
-    (when-not component-group
-      (throw (group-ref-exception system (component-id ref) component-group-name)))
+  (let [[component-group-name component-name :as rkey] (ref-key ref)]
+    (when-not (contains? (::instances system)
+                         component-group-name)
+      (throw (group-ref-exception system
+                                  (component-id ref)
+                                  component-group-name)))
     (when (and component-name
-               (not (contains? (sp/select-one [::instances component-group-name] system) component-name)))
-      (throw (ref-exception system referencing-component-id (component-id ref))))
+               (not (contains? (get-in system [::instances component-group-name])
+                               component-name)))
+      (throw (ref-exception system
+                            referencing-component-id
+                            (component-id ref))))
     (sp/select-one [::instances rkey] system)))
 
 (defn- default-resolve-refs
+  "for all refs R within component def D, replaces R with the instance of the
+  component that R refers to. places the result in `::resolved-defs`"
   [system component-id]
   (->> system
        (sp/setval [::resolved-defs component-id]
@@ -214,9 +221,11 @@
                            (= ::ref rt)
                            (resolve-ref system component-id ref-or-system)
 
-                           ;; local refs
+                           ;; local refs get converted to a regular ref by using
+                           ;; the group name of the current component
                            (= ::local-ref rt)
-                           (resolve-ref system component-id (ref (into [(first component-id)] (ref-key ref-or-system))))))))))
+                           (resolve-ref system component-id (ref (into [(first component-id)]
+                                                                       (ref-key ref-or-system))))))))))
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
@@ -260,6 +269,8 @@
   local refs -- (ref :component-name) -- or group refs
   -- (group-ref :group-name). This function desugars both kinds of refs. "
   [system]
+  ;; walk over all component defs, filtering for refs and systems, to apply
+  ;; transformation
   (sp/transform [config-collect-group-path (sp/walker (some-fn ref? system?))]
                 (fn [group-name x]
                   (let [rt (ref-type x)]
@@ -284,6 +295,7 @@
                 system))
 
 (defn- ref-edges
+  "used to populate the component graph with directed edges"
   [system direction]
   (->> system
        expand-refs-for-graph
@@ -293,20 +305,21 @@
                    sp/LAST
                    (sp/walker ref?)])
        (map (fn [[group-name component-name ref]]
-              (if (= :topsort direction)
-                [[group-name component-name]
-                 (component-id ref)]
-                [(component-id ref)
-                 [group-name component-name]])))))
+              (let [parent [group-name component-name]
+                    child  (component-id ref)]
+                (if (= :topsort direction)
+                  [parent child]
+                  [child parent]))))))
 
 (defn- component-graph-add-edges
+  "uses refs to build a dependency map for components"
   [graph system direction]
   (reduce (fn [graph edge]
             (lg/add-edges graph edge))
           graph
           (ref-edges system direction)))
 
-(defn gen-graphs
+(defn- gen-graphs
   "Generates order graphs. If `::selected-component-ids` is specified, graphs are
   filtered to the union of all subgraphs reachable by the selected component
   ids."
@@ -341,25 +354,8 @@
    ::resume  {:order :reverse-topsort}})
 
 ;;---
-;;; signal application
+;;; channel fns
 ;;---
-
-(defn- apply-signal-exception
-  [_system computation-stage t]
-  (ex-info (str "Error on " computation-stage " when applying signal")
-           {:component      (vec (take 2 computation-stage))
-            :signal-handler (last computation-stage)
-            :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))}
-           t))
-
-(defn- handler-lifecycle-names
-  [signal-name]
-  (let [snns (namespace signal-name)
-        snn  (name signal-name)]
-    {:apply-signal signal-name
-     :before       (keyword snns (str "before-" snn))
-     :after        (keyword snns (str "after-" snn))}))
 
 (defn- channel-fn
   [system channel component-id]
@@ -377,10 +373,6 @@
    :->validation (channel-fn system [::out :validation] component-id)
    :->instance   (channel-fn system [::instances] component-id)})
 
-(defn- system-identity
-  [{:keys [::system]}]
-  system)
-
 ;;---
 ;;; computation graph
 ;;---
@@ -388,7 +380,22 @@
 ;; Signal application works by generating a "signal computation graph", where
 ;; each node corresponds to a function that... TODO
 
-(defn gen-signal-computation-graph
+(defn- system-identity
+  "used by stage functions to return the current system"
+  [{:keys [::system]}]
+  system)
+
+(defn- handler-lifecycle-names
+  [signal-name]
+  (let [snns (namespace signal-name)
+        snn  (name signal-name)]
+    {:apply-signal signal-name
+     :before       (keyword snns (str "before-" snn))
+     :after        (keyword snns (str "after-" snn))}))
+
+(defn- gen-signal-computation-graph
+  "creates the graph that should be traversed to call handler (and lifecycle) fns
+  for the given signal"
   [system signal order]
   (let [component-graph        (get-in system [::graphs order])
         {:keys [before after]} (handler-lifecycle-names signal)]
@@ -409,28 +416,28 @@
             (lg/digraph)
             (la/topsort component-graph))))
 
-(defn init-signal-computation-graph
+(defn- init-signal-computation-graph
   [system signal]
   (assoc system
          ::signal-computation-graph
          (gen-signal-computation-graph system
                                        signal
-                                       (get-in system
-                                               [::signals signal :order]))))
+                                       (get-in system [::signals signal :order]))))
 
-(defn signal-stage?
-  "The stage corresponds to a signal, not a signal lifecycle"
+(defn- handler-stage?
+  "The stage corresponds to a signal (eg ::start), not a signal lifecycle (eg ::before-start)"
   [stage]
   (not (re-find #"(^before-|^after-)" (name stage))))
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
   (let [resolved-def (sp/select-one [::resolved-defs component-id] system)]
-    (stage-fn (cond-> {::instance (sp/select-one [::instances component-id] system)
-                       ::system   system
-                       ::config   (sp/select-one [::resolved-defs component-id] system)}
-                (map? resolved-def) (merge resolved-def)
-                true                (merge (channel-fns system component-id))))))
+    (stage-fn
+     ;; construct map to pass to the `stage-fn`
+     (cond-> {::instance (sp/select-one [::instances component-id] system)
+              ::system   system}
+       (map? resolved-def) (merge resolved-def)
+       true                (merge (channel-fns system component-id))))))
 
 (defn- stage-result-valid?
   [system]
@@ -449,7 +456,7 @@
    (apply dissoc m nodes)
    adjacents))
 
-(defn remove-nodes
+(defn- remove-nodes
   [g nodes]
   (let [ins (mapcat #(lg/predecessors g %) nodes)
         outs (mapcat #(lg/successors g %) nodes)]
@@ -458,7 +465,9 @@
         (assoc :adj (remove-adj-nodes (:adj g) nodes ins disj))
         (assoc :in (remove-adj-nodes (:in g) nodes outs disj)))))
 
-(defn prune-signal-computation-graph
+(defn- prune-signal-computation-graph
+  "remove subgraph reachable from computation-stage-node to prevent those
+  handlers/lifecycles from being applied"
   [system computation-stage-node]
   (update system
           ::signal-computation-graph
@@ -468,14 +477,14 @@
                  (lg/nodes)
                  (remove-nodes graph)))))
 
-(defn remove-signal-computation-stage-node
+(defn- remove-signal-computation-stage-node
   [system computation-stage-node]
   (update system
           ::signal-computation-graph
           remove-nodes
           [computation-stage-node]))
 
-(defn handler-stage-fn
+(defn- lifecycle-stage-fn
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
         stage-fn     (or (sp/select-one [::resolved-defs computation-stage-node] system)
@@ -486,28 +495,37 @@
           stage-result
           system)))))
 
-(defn signal-stage-fn
-  "computation node will be e.g. [:env :http-port ::start]"
+(defn- handler-stage-fn
+  "returns function for a handler (e.g. ::start) as opposed to a lifecycle
+  fn (e.g. ::before-start)"
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
         resolved-def (sp/select-one [::resolved-defs component-id] system)
-        signal-fn    (cond (not resolved-def)
-                           system-identity
+        signal-fn    (cond
+                       ;; this can happen if you have a ref to a nonexistent
+                       ;; component. it allows signal application to progress to
+                       ;; the point that we can throw an exception saying that
+                       ;; the ref is invalid
+                       (not resolved-def)
+                       system-identity
 
-                           (component? resolved-def)
-                           (or (sp/select-one [::resolved-defs computation-stage-node] system)
-                               (when-let [fallback-handler (sp/select-one [::resolved-defs component-id ::mk-signal-handler]
-                                                                          system)]
-                                 (fallback-handler (last computation-stage-node)))
-                               system-identity)
+                       (component? resolved-def)
+                       (or (sp/select-one [::resolved-defs computation-stage-node] system)
+                           ;; catchall handler is used by subsystem to forward
+                           ;; signals
+                           (when-let [catchall-handler (sp/select-one [::resolved-defs component-id ::mk-signal-handler]
+                                                                      system)]
+                             (catchall-handler (last computation-stage-node)))
+                           system-identity)
 
-                           :else
-                           (constantly resolved-def))
+                       :else
+                       (constantly resolved-def))
 
-        ;; accomodate setting a constant value for a signal
+        ;; accomodates signal handlers that are constant values, not functions
         signal-fn (if (fn? signal-fn)
                     signal-fn
                     (constantly signal-fn))]
+
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)]
         (if (system? stage-result)
@@ -516,9 +534,9 @@
 
 (defn- computation-stage-fn
   [system [_ _ stage :as computation-stage-node]]
-  (if (signal-stage? stage)
-    (signal-stage-fn system computation-stage-node)
-    (handler-stage-fn system computation-stage-node)))
+  (if (handler-stage? stage)
+    (handler-stage-fn system computation-stage-node)
+    (lifecycle-stage-fn system computation-stage-node)))
 
 (defn- prep-system-for-apply-signal-stage
   "Updates system to
@@ -532,7 +550,17 @@
                          (resolve-refs component-id))]
     (assoc part-prepped ::current-resolved-component (resolved part-prepped))))
 
-(defn apply-signal-stage
+(defn- apply-signal-exception
+  "provide a more specific exception for signal application to help narrow down the source of the exception"
+  [_system computation-stage t]
+  (ex-info (str "Error on " computation-stage " when applying signal")
+           {:component      (vec (take 2 computation-stage))
+            :signal-handler (last computation-stage)
+            :message        #?(:clj (.getMessage t)
+                               :cljs (. t -message))}
+           t))
+
+(defn- apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
@@ -546,7 +574,7 @@
       (remove-signal-computation-stage-node new-system computation-stage-node)
       (prune-signal-computation-graph new-system computation-stage-node))))
 
-(defn apply-signal-computation-graph
+(defn- apply-signal-computation-graph
   [system]
   (loop [{:keys [::signal-computation-graph] :as system} system]
     (let [[computation-stage-node] (la/topsort signal-computation-graph)]
@@ -594,10 +622,6 @@
       (assoc ::last-signal signal-name)
       gen-graphs))
 
-(defn- clean-after-signal-apply
-  [system]
-  (dissoc system :->error :->info :->instance :->warn :->validation))
-
 (defn signal
   [system signal-name & [component-keys]]
   (when-let [explanation (m/explain DonutSystem system)]
@@ -614,8 +638,7 @@
                        :spec-explain-human (me/humanize explanation)})))
     (-> inited-system
         (init-signal-computation-graph signal-name)
-        (apply-signal-computation-graph)
-        (clean-after-signal-apply))))
+        (apply-signal-computation-graph))))
 
 (defn validate-instance-with-malli
   "helper function for validating component instances with malli if a schema is
@@ -704,7 +727,7 @@
    ::subsystem         subsystem})
 
 (defn alias-component
-  "creates a compnoent that just provides an instance defined elsewhere in the system"
+  "creates a component that just provides an instance defined elsewhere in the system"
   [component-id]
   {::start             (fn [{:keys [::aliased-component]}]
                          aliased-component)
@@ -719,6 +742,7 @@
   identity)
 
 (defn assoc-many
+  "(assoc-many {} {[:foo :bar] :bux}) => {:foo {:bar :bux}"
   ([m assocs]
    (reduce-kv (fn [m path val] (assoc-in m path val))
               m
@@ -750,7 +774,7 @@
 
 (defn stop [system] (signal system ::stop))
 (defn suspend [system] (signal system ::suspend))
-(defn resume [system] (signal system :r:esume))
+(defn resume [system] (signal system ::resume))
 
 
 ;;---

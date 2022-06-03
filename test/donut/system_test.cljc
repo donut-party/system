@@ -184,7 +184,7 @@
                  [:app :http-server :after-start]]
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
-           (ds/gen-signal-computation-graph system :start :reverse-topsort)))))
+           (#'ds/gen-signal-computation-graph system :start :reverse-topsort)))))
 
 
 (deftest channel-fns-test
