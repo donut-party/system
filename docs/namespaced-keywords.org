@@ -42,6 +42,10 @@ You can use namespaced keywords when destructuring arguments:
   {::ds/start "start component"})
 
 (let [{:keys [::ds/start]} Component]
-  (prn "start is: " start))
-;; prints "start component"
+  (println "start is:" start))
+;; prints "start is: start component"
+
+(let [{::ds/keys [start]} Component]
+  (println "start is:" start))
+;; also prints "start is: start component"
 #+end_src
