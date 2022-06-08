@@ -73,13 +73,13 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
-                                      (atom (vec (range (:items config)))))
-                            :stop   (fn [{:keys [::ds/instance]}]
-                                      (reset! instance []))
-                            :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{:keys [::ds/config]}]
-                                        (let [{:keys [stack]} config]
+   {:services {:stack {:start  (fn [{:keys [::ds/config]}]
+                                  (atom (vec (range (:items config)))))
+                       :stop   (fn [{:keys [::ds/instance]}]
+                                 (reset! instance []))
+                       :config {:items 10}}}
+    :app      {:printer {:start  (fn [{:keys [::ds/config]}]
+                                   (let [{:keys [stack]} config]
                                           (doto (Thread.
                                                  (fn []
                                                    (prn "peek:" (peek @stack))
@@ -87,9 +87,9 @@ item off the `:stack` and prints it once a second:
                                                    (Thread/sleep 1000)
                                                    (recur)))
                                             (.start))))
-                              :stop   (fn [{:keys [::ds/instance]}]
-                                        (.interrupt instance))
-                              :config {:stack (ds/ref [:services :stack])}}}}})
+                         :stop   (fn [{:keys [::ds/instance]}]
+                                   (.interrupt instance))
+                         :config {:stack (ds/ref [:services :stack])}}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
 (comment
