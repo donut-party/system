@@ -93,9 +93,9 @@ item off the `:stack` and prints it once a second:
 
 ;; start the system, let it run for 5 seconds, then stop it
 (comment
-  (let [running-system (ds/signal system ::ds/start)]
+  (let [running-system (ds/signal system :start)]
     (Thread/sleep 5000)
-    (ds/signal running-system ::ds/stop)))
+    (ds/signal running-system :stop)))
 ```
 
 > **NOTE**: donut.system makes heavy use of _namespaced keywords_. If the
