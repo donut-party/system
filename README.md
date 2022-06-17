@@ -73,21 +73,20 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
-                                      (atom (vec (range (:items config)))))
-                            :stop   (fn [{:keys [::ds/instance]}]
+   {:services {:stack #::ds{:start  (fn [{{:keys [items]} ::ds/config}]
+                                      (atom (vec (range items))))
+                            :stop   (fn [{::ds/keys[instance]}]
                                       (reset! instance []))
                             :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{:keys [::ds/config]}]
-                                        (let [{:keys [stack]} config]
-                                          (doto (Thread.
-                                                 (fn []
-                                                   (prn "peek:" (peek @stack))
-                                                   (swap! stack pop)
-                                                   (Thread/sleep 1000)
-                                                   (recur)))
-                                            (.start))))
-                              :stop   (fn [{:keys [::ds/instance]}]
+    :app      {:printer #::ds{:start  (fn [{{:keys [stack]} ::ds/config}]
+                                        (doto (Thread.
+                                               (fn []
+                                                 (prn "peek:" (peek @stack))
+                                                 (swap! stack pop)
+                                                 (Thread/sleep 1000)
+                                                 (recur)))
+                                          (.start)))
+                              :stop   (fn [{::ds/keys [instance]}]
                                         (.interrupt instance))
                               :config {:stack (ds/ref [:services :stack])}}}}})
 
@@ -127,8 +126,8 @@ this system with a single component definition shows:
 
 ``` clojure
 (def Stack
-  #::ds{:start  (fn [{:keys [::ds/config]}] (atom (vec (range (:items config)))))
-        :stop   (fn [{:keys [::ds/instance]}] (reset! instance []))
+  #::ds{:start  (fn [{{:keys [items]} ::ds/config}] (atom (vec (range items))))
+        :stop   (fn [{::ds/keys [instance]}] (reset! instance []))
         :config {:items 10}})
 
 (def system {::ds/defs {:services {:stack Stack}}})
@@ -177,7 +176,7 @@ atom is passed in under `::ds/instance` key. In the example above, the
 `::ds/stop` signal handler destructures this:
 
 ``` clojure
-(fn [{:keys [::ds/instance]}] (reset! instance []))
+(fn [{::ds/keys [instance]}] (reset! instance []))
 ```
 
 This is how you can allocate and deallocate the resources needed for your
@@ -200,21 +199,20 @@ stack printer again:
 ``` clojure
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
-                                      (atom (vec (range (:items config)))))
-                            :stop   (fn [{:keys [::ds/instance]}]
+   {:services {:stack #::ds{:start  (fn [{{:keys [items]} ::ds/config}]
+                                      (atom (vec (range items ))))
+                            :stop   (fn [{::ds/keys [instance]}]
                                       (reset! instance []))
                             :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{:keys [::ds/config]}]
-                                        (let [{:keys [stack]} config]
-                                          (doto (Thread.
-                                                 (fn []
-                                                   (prn "peek:" (peek @stack))
-                                                   (swap! stack pop)
-                                                   (Thread/sleep 1000)
-                                                   (recur)))
-                                            (.start))))
-                              :stop   (fn [{:keys [::ds/instance]}]
+    :app      {:printer #::ds{:start  (fn [{{:keys [stack]} ::ds/config}]
+                                        (doto (Thread.
+                                               (fn []
+                                                 (prn "peek:" (peek @stack))
+                                                 (swap! stack pop)
+                                                 (Thread/sleep 1000)
+                                                 (recur)))
+                                          (.start)))
+                              :stop   (fn [{::ds/keys [instance]}]
                                         (.interrupt instance))
                               :config {:stack (ds/ref [:services :stack])}}}}})
 ```
@@ -245,10 +243,9 @@ instance. This can be useful for configuration. Consider this system:
 (def system
   {::ds/defs
    {:env  {:http-port 8080}
-    :http {:server  #::ds{:start  (fn [{:keys [::ds/config]}]
-                                    (let [{:keys [handler options]} config]
-                                      (rj/run-jetty handler options)))
-                          :stop   (fn [{:keys [::ds/instance]}]
+    :http {:server  #::ds{:start  (fn [{{:keys [handler options]} ::ds/config}]
+                                    (rj/run-jetty handler options))
+                          :stop   (fn [{::ds/keys [instance]}]
                                     (.stop instance))
                           :config {:handler (ds/local-ref [:handler])
                                    :options {:port  (ds/ref [:env :http-port])
@@ -401,13 +398,12 @@ either a system name or a system map, and can take optional overrides:
 (ds/start :test {[:services :queue] mock-queue})
 ```
 
-The `start` helper also takes an optional third argument to select components:
+The `start` helper also takes an optional third argument to select a subset of components start:
 
 ``` clojure
 (ds/start :test 
           {[:services :queue] mock-queue}
-          #{[:app :http-server]} ;; <- component selection
-          )
+          #{[:app :http-server]}) ;; <- component selection
 ```
 
 Component selection is explained below.
@@ -433,7 +429,7 @@ This will reload any changed files and then start your system again.
 
 ### Organization and configuration
 
-Where do you actually put your donut.system-related code? Relatedly, how do you
+Where do you actually put your donut.system-related code? And how do you
 handle configuration?
 
 I recommend creating a `your-project.system` namespace to define your base system. It
@@ -459,16 +455,16 @@ might look something like this:
 
     :http
     {:server
-     #::ds{:start  (fn [{:keys [handler options]}]
+     #::ds{:start  (fn [{{:keys [handler options]} ::ds/config}]
                      (rj/run-jetty handler options))
-           :stop   (fn [{:keys [::ds/instance]}]
+           :stop   (fn [{::ds/keys [instance]}]
                      (.stop instance))
            :config {:handler (ds/ref :handler)
                     :options {:port  (ds/ref [:env :http-port])
                               :join? false}}}
 
      :handler
-     {:start (fn [conf _ _]
+     {:start (fn [_]
                ;; handler goes here
                )}}}})
 
@@ -505,7 +501,7 @@ example, this would work:
 
     :http 
     {:server
-     #::ds{:start  (fn [{:keys [handler options]}]
+     #::ds{:start  (fn [{{:keys [handler options]} ::ds/config}]
                      (rj/run-jetty handler options))
            :config {:handler (ds/ref :handler)
                     :options {:port  (ds/ref [:env :http :port])
@@ -513,7 +509,7 @@ example, this would work:
 ```
 
 Note the second-to-last-line includes `(ds/ref [:env :http :port])` - this will
-corrrectly reference the HTTP port.
+correctly reference the HTTP port.
 
 
 ## Advanced usage
@@ -549,10 +545,9 @@ could do that:
 
 
 (def HTTPServer
-  #::ds{:start  (fn [{:keys [::ds/config]}]
-                  (let [{:keys [handler options]} config]
-                    (rj/run-jetty handler options)))
-        :stop   (fn [{:keys [::ds/instance]}]
+  #::ds{:start  (fn [{{:keys [handler options]} ::ds/config}]
+                  (rj/run-jetty handler options))
+        :stop   (fn [{::ds/keys [instance]}]
                   (.stop instance))
         :config {:handler (ds/local-ref [:handler])
                  :options {:port  (ds/local-ref [:port])
@@ -592,8 +587,8 @@ first-class support for groups.
 You can select parts of a system to send a signal to:
 
 ``` clojure
-(let [running-system (ds/signal system ::ds/start nil #{[:group-1 :component-1]
-                                                        [:group-1 :component-2]})]
+(let [running-system (ds/signal system ::ds/start #{[:group-1 :component-1]
+                                                    [:group-1 :component-2]})]
   (ds/signal running-system ::ds/stop))
 ```
 
@@ -610,7 +605,7 @@ You can also select component groups by using just the group's name for your
 selection, like so:
 
 ``` clojure
-(ds/signal system ::ds/start nil #{:group-1})
+(ds/signal system ::ds/start #{:group-1})
 ```
 
 ### Stages
@@ -644,7 +639,7 @@ already-started component should not create a new instance but use an existing
 one. The code would look something like this:
 
 ``` clojure
-(fn [{:keys [::ds/config ::ds/instance]}]
+(fn [{::ds/keys [config instance]}]
   (or instance
       (create-logger config)))
 ```
@@ -669,7 +664,7 @@ Here's how you might print signal progress:
 
 ``` clojure
 (defn print-progress
-  [{:keys [::ds/system]}]
+  [{::ds/keys [system]}]
   (prn (::ds/component-id system)))
 
 (def system
@@ -767,9 +762,10 @@ One way you could make use of these features is to write something like this:
    [malli.core :as m]))
 
 (defn validate-config
-  [{:keys [->validation schema] :as config}]
-  (when-let [errors (and schema (m/explain schema config))]
-    (->validation errors)))
+  [{:keys [->validation ::ds/config]}]
+  (when-let [schema (:schema config)]
+    (when-let [errors (m/explain schema (dissoc config :schema))]
+      (->validation errors))))
 
 (def system
   {::ds/defs
@@ -799,9 +795,10 @@ example could be rewritten like this:
    [malli.core :as m]))
 
 (defn validate-config
-  [{:keys [->validation schema] :as config}]
-  (when-let [errors (and schema (m/explain schema config))]
-    (->validation errors)))
+  [{:keys [->validation ::ds/config]}]
+  (when-let [schema (:schema config)]
+    (when-let [errors (m/explain schema config)]
+      (->validation errors))))
 
 (def system
   {::ds/base #::ds{:before-start validate-config}
@@ -836,16 +833,16 @@ do, I've tried to make it straightforward. Check it out:
   [print-prefix]
   {::ds/defs
    {:workers
-    {:print-worker #::ds{:start  (fn [{:keys [stack]}]
+    {:print-worker #::ds{:start  (fn [{{:keys [stack]} ::ds/config}]
                                    (mk-print-thread print-prefix stack))
-                         :stop   (fn [{:keys [::ds/instance]}]
+                         :stop   (fn [{::ds/keys [instance]}]
                                    (.stop instance))
                          :config {:stack (ds/ref [:services :stack])}}}}})
 
 (def system
   {::ds/defs
    {:services {:stack #::ds{:start (fn [_] (atom (vec (range 20))))
-                            :stop  (fn [{:keys [::ds/instance]}] (reset! instance []))}}
+                            :stop  (fn [{::ds/keys [instance]}] (reset! instance []))}}
     :printers {:printer-1 (ds/subsystem-component
                            (print-worker-system ":printer-1")
                            #{(ds/ref [:services])})
@@ -864,7 +861,7 @@ We generate definitions for the subsystems with the function
 references `[:services :stack]`, but notice that there is no `[:services
 :stack]` component in the `print-worker-system` definition.
 
-Inernally, the parent system wraps these subsystems with a call to
+Internally, the parent system wraps these subsystems with a call to
 `ds/subsystem-component`. `ds/subsystem-component` returns a component def, a
 map with a `::ds/start` signal handler that "forwards" the signal to the
 subsystem. The component def also includes the key `::ds/mk-signal-handler`, a
@@ -963,8 +960,8 @@ following map for easy consumption in a donut.system project:
 
 ``` clojure
 (def CronutComponent
-  :donut.system{:start (fn [conf _ _] (initialize conf))
-                :stop  (fn [_ scheduler _] (shutdown scheduler))})
+  :donut.system{:start (fn [{:donut.system/keys [config]}] (initialize config))
+                :stop  (fn [{:donut.system/keys [instance]}] (shutdown instance))})
 ```
 
 What if you want to define a component group without depending on donut.system?
@@ -973,9 +970,9 @@ have local refs to each other. Here's how you could do that:
 
 ``` clojure
 (def CoolLibComponentGroup
-  {:component-a #::ds{:start (fn [_] ...)}
-   :component-b #::ds{:start  (fn [{:keys [component-a]}])
-                      :config {:component-a [:donut.system/ref :component-a]}}})
+  {:component-a #:donut.system{:start (fn [_] ...)}
+   :component-b #:donut.system{:start  (fn [{{:keys [component-a]} :donut.system/config}])
+                               :config {:component-a [:donut.system/ref :component-a]}}})
 ```
 
 The key is that refs are represented with the vector `[:donut.system/ref
