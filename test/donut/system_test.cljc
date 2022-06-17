@@ -205,7 +205,8 @@
                         {:local {:port 9090}
 
                          :app
-                         {:server #::ds{:start       (fn [{:keys [::ds/config]}] config)
+                         {:local  #::ds{:start (fn [_] :local)}
+                          :server #::ds{:start       (fn [{:keys [::ds/config]}] config)
                                         :after-start (fn [{:keys [->info]}]
                                                        (->info "started"))
                                         :stop        (fn [{:keys [::ds/instance]}]
@@ -215,7 +216,8 @@
                                                        (->info "stopped"))
                                         :config      {:job-queue (ds/ref [:common-services :job-queue])
                                                       :db        (ds/ref [:common-services :db])
-                                                      :port      (ds/ref [:local :port])}}}}}
+                                                      :port      (ds/ref [:local :port])
+                                                      :local     (ds/local-ref [:local])}}}}}
 
         started (-> #::ds{:defs
                           {:env
@@ -237,7 +239,8 @@
 
     (is (= {:job-queue "job queue"
             :db        "db"
-            :port      9090}
+            :port      9090
+            :local     :local}
            (get-in started [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
            (get-in started [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
     (is (= "started"
@@ -247,7 +250,8 @@
     (let [stopped (ds/signal started ::ds/stop)]
       (is (= {:prev {:job-queue "job queue"
                      :db        "db"
-                     :port      9090}
+                     :port      9090
+                     :local     :local}
               :now  :stopped}
              (get-in stopped [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
              (get-in stopped [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
