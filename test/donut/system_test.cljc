@@ -46,9 +46,9 @@
                          :topsort))))
 
 (deftest gen-graphs-test
-  (let [system (ds/gen-graphs #::ds{:defs {:env {:port-source nil
-                                                 :http-port   (ds/local-ref [:port-source])}
-                                           :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
+  (let [system (#'ds/gen-graphs #::ds{:defs {:env {:port-source nil
+                                                   :http-port   (ds/local-ref [:port-source])}
+                                             :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
     (is (= [[:app :http-server]
             [:env :http-port]
             [:env :port-source]]
@@ -174,8 +174,8 @@
                 (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
-  (let [system (ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
-                                           :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
+  (let [system (#'ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
+                                             :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
     (is (= (->> [[:env :http-port :before-start]
                  [:env :http-port :start]
                  [:env :http-port :after-start]

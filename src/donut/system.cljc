@@ -319,7 +319,7 @@
           graph
           (ref-edges system direction)))
 
-(defn gen-graphs
+(defn- gen-graphs
   "Generates order graphs. If `::selected-component-ids` is specified, graphs are
   filtered to the union of all subgraphs reachable by the selected component
   ids."
