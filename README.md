@@ -32,6 +32,7 @@ that introduces *system* and *component* abstractions to:
   - [Systems](#systems)
   - [Config helpers](#config-helpers)
   - [Reloaded REPL workflow](#reloaded-repl-workflow)
+  - [Handling Failures](#handling-failures)
   - [Organization and configuration](#organization-and-configuration)
 - [Advanced usage](#advanced-usage)
   - [Groups and local refs](#groups-and-local-refs)
@@ -426,6 +427,28 @@ Calling `donut.system.repl/start` will start this system.
 2. Call `(clojure.tools.namespace.repl/refresh :after 'donut.system.repl/start)`
 
 This will reload any changed files and then start your system again.
+
+### Handling Failures
+
+As you develop your project, it's likely an exception will get thrown when
+you're trying to start your system. This can cause some resources to be claimed
+without an obvious way to recover them. For example, your system might start an
+HTTP server on port 8080, then throw an exception, leaving you without a clear
+way to stop the HTTP server.
+
+You can try to stop a failed system with the function
+`donut.system/stop-failed-system`. Here's its source:
+
+``` clojure
+(defn stop-failed-system
+  "Will attempt to stop a system that threw an exception when starting"
+  []
+  (when-let [system (and *e (::system (ex-data *e)))]
+    (stop system)))
+```
+
+If you're trying to start a system using `donut.system.repl/start`, it will
+automatically try to stop a failed system if an exception gets thrown.
 
 ### Organization and configuration
 
