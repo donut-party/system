@@ -12,16 +12,16 @@
   (get-in opts [::ds/config :port]))
 
 (deftest merge-base-test
-  (is (= #::ds{:base {:before-start [:foo]}
-               :defs {:app {:http-server {:before-start [:foo]
-                                          :after-start  [:bar]}}}}
-         (#'ds/merge-base #::ds{:base {:before-start [:foo]}
-                                :defs {:app {:http-server {:after-start [:bar]}}}})))
+  (is (= #::ds{:base {:pre-start [:foo]}
+               :defs {:app {:http-server {:pre-start  [:foo]
+                                          :post-start [:bar]}}}}
+         (#'ds/merge-base #::ds{:base {:pre-start [:foo]}
+                                :defs {:app {:http-server {:post-start [:bar]}}}})))
 
   (is (= [:foo]
-         (get-in (#'ds/merge-base #::ds{:base {:before-start [:foo]}
+         (get-in (#'ds/merge-base #::ds{:base {:pre-start [:foo]}
                                         :defs {:app {:http-server [:bar]}}})
-                 [::ds/defs :app :http-server :before-start]))))
+                 [::ds/defs :app :http-server :pre-start]))))
 
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
@@ -66,8 +66,8 @@
 
   (is (= #::ds{:instances {:app {:boop "boop and boop again"}}}
          (-> #::ds{:defs {:app {:boop #::ds{:start "boop"
-                                            :stop (fn [{:keys [::ds/instance]}]
-                                                    (str instance " and boop again"))}}}}
+                                            :stop  (fn [{:keys [::ds/instance]}]
+                                                     (str instance " and boop again"))}}}}
              (ds/signal ::ds/start)
              (ds/signal ::ds/stop)
              (select-keys [::ds/instances])))))
@@ -95,8 +95,8 @@
   (testing "components with deep refs are started in the correct order"
     (let [vref-comp (fn [comp-name]
                       #::ds{:config {:ref (ds/ref [:group comp-name :v])}
-                            :start (fn [{{ref :ref} ::ds/config}]
-                                     {:v ref})})]
+                            :start  (fn [{{ref :ref} ::ds/config}]
+                                      {:v ref})})]
       (is (= #::ds{:instances {:group {:c1 {:v :x} :c2 {:v :x} :c3 {:v :x} :c4 {:v :x}}}}
              (-> #::ds{:defs {:group {:c1 {:v :x}
                                       :c2 (vref-comp :c4)
@@ -147,7 +147,7 @@
                                                                 :in     []
                                                                 :schema schema
                                                                 :value  "9090"}]}}}}}
-           (-> #::ds{:base {::ds/after-start ds/validate-instance-with-malli}
+           (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
 
                      :defs {:env {:http-port #::ds{:start  "9090"
                                                    :schema schema}}
@@ -164,24 +164,24 @@
                                                        :config {:port (ds/ref [:env :http-port])}}}}}]
     (is (= expected
            (->  system
-                (assoc-in [::ds/defs :app :http-server ::ds/before-start] (constantly nil))
+                (assoc-in [::ds/defs :app :http-server ::ds/pre-start] (constantly nil))
                 (ds/signal ::ds/start)
                 (select-keys [::ds/instances]))))
     (is (= expected
            (->  system
-                (assoc-in [::ds/defs :app :http-server ::ds/after-start] (constantly nil))
+                (assoc-in [::ds/defs :app :http-server ::ds/post-start] (constantly nil))
                 (ds/signal ::ds/start)
                 (select-keys [::ds/instances]))))))
 
 (deftest gen-signal-computation-graph-test
   (let [system (#'ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
                                              :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
-    (is (= (->> [[:env :http-port :before-start]
+    (is (= (->> [[:env :http-port :pre-start]
                  [:env :http-port :start]
-                 [:env :http-port :after-start]
-                 [:app :http-server :before-start]
+                 [:env :http-port :post-start]
+                 [:app :http-server :pre-start]
                  [:app :http-server :start]
-                 [:app :http-server :after-start]]
+                 [:app :http-server :post-start]]
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
            (#'ds/gen-signal-computation-graph system :start :reverse-topsort)))))
@@ -206,18 +206,18 @@
 
                          :app
                          {:local  #::ds{:start (fn [_] :local)}
-                          :server #::ds{:start       (fn [{:keys [::ds/config]}] config)
-                                        :after-start (fn [{:keys [->info]}]
-                                                       (->info "started"))
-                                        :stop        (fn [{:keys [::ds/instance]}]
-                                                       {:prev instance
-                                                        :now  :stopped})
-                                        :after-stop  (fn [{:keys [->info]}]
-                                                       (->info "stopped"))
-                                        :config      {:job-queue (ds/ref [:common-services :job-queue])
-                                                      :db        (ds/ref [:common-services :db])
-                                                      :port      (ds/ref [:local :port])
-                                                      :local     (ds/local-ref [:local])}}}}}
+                          :server #::ds{:start      (fn [{:keys [::ds/config]}] config)
+                                        :post-start (fn [{:keys [->info]}]
+                                                      (->info "started"))
+                                        :stop       (fn [{:keys [::ds/instance]}]
+                                                      {:prev instance
+                                                       :now  :stopped})
+                                        :post-stop  (fn [{:keys [->info]}]
+                                                      (->info "stopped"))
+                                        :config     {:job-queue (ds/ref [:common-services :job-queue])
+                                                     :db        (ds/ref [:common-services :db])
+                                                     :port      (ds/ref [:local :port])
+                                                     :local     (ds/local-ref [:local])}}}}}
 
         started (-> #::ds{:defs
                           {:env
@@ -346,8 +346,8 @@
 
     (is (= {::ds/instances {:app {:boop "boop and boop again"}}}
            (-> {::ds/defs {:app {:boop #::ds{:start "boop"
-                                             :stop (fn [{:keys [::ds/instance]}]
-                                                     (str instance " and boop again"))}}}}
+                                             :stop  (fn [{:keys [::ds/instance]}]
+                                                      (str instance " and boop again"))}}}}
                (ds/start)
                (ds/stop)
                (select-keys [::ds/instances]))))))
@@ -367,7 +367,7 @@
                   :foo)))
 
   (testing "should not throw exception"
-    (is (ds/signal {::ds/defs {:group {:component "constant"}}
+    (is (ds/signal {::ds/defs    {:group {:component "constant"}}
                     ::ds/signals (merge ds/default-signals {:foo {:order :topsort}})}
                    :foo))))
 

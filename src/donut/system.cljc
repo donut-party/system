@@ -390,27 +390,27 @@
   (let [snns (namespace signal-name)
         snn  (name signal-name)]
     {:apply-signal signal-name
-     :before       (keyword snns (str "before-" snn))
-     :after        (keyword snns (str "after-" snn))}))
+     :pre          (keyword snns (str "pre-" snn))
+     :post         (keyword snns (str "post-" snn))}))
 
 (defn- gen-signal-computation-graph
   "creates the graph that should be traversed to call handler (and lifecycle) fns
   for the given signal"
   [system signal order]
   (let [component-graph        (get-in system [::graphs order])
-        {:keys [before after]} (handler-lifecycle-names signal)]
+        {:keys [pre post]} (handler-lifecycle-names signal)]
     (reduce (fn [computation-graph component-node]
               (let [;; generate nodes and edges just for the lifecycle of this
                     ;; component's signal handler
-                    computation-graph (->> [before signal after]
+                    computation-graph (->> [pre signal post]
                                            (map #(conj component-node %))
                                            (partition 2 1)
                                            (apply lg/add-edges computation-graph))
                     successors        (lg/successors component-graph component-node)]
                 (reduce (fn [computation-graph successor-component-node]
                           (lg/add-edges computation-graph
-                                        [(conj component-node after)
-                                         (conj successor-component-node before)]))
+                                        [(conj component-node post)
+                                         (conj successor-component-node pre)]))
                         computation-graph
                         successors)))
             (lg/digraph)
@@ -425,9 +425,9 @@
                                        (get-in system [::signals signal :order]))))
 
 (defn- handler-stage?
-  "The stage corresponds to a signal (eg ::start), not a signal lifecycle (eg ::before-start)"
+  "The stage corresponds to a signal (eg ::start), not a signal lifecycle (eg ::pre-start)"
   [stage]
-  (not (re-find #"(^before-|^after-)" (name stage))))
+  (not (re-find #"(^pre-|^post-)" (name stage))))
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
@@ -497,7 +497,7 @@
 
 (defn- handler-stage-fn
   "returns function for a handler (e.g. ::start) as opposed to a lifecycle
-  fn (e.g. ::before-start)"
+  fn (e.g. ::pre-start)"
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
         resolved-def (sp/select-one [::resolved-defs component-id] system)

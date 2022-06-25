@@ -38,7 +38,7 @@ that introduces *system* and *component* abstractions to:
   - [Groups and local refs](#groups-and-local-refs)
   - [Selecting components](#selecting-components)
   - [Stages](#stages)
-  - [Before, after, validation, and "channels"](#before-after-validation-and-channels)
+  - [Pre, post, validation, and "channels"](#pre-post-validation-and-channels)
   - [::ds/base](#dsbase)
   - [Subsystems](#subsystems)
 - [Purpose](#purpose)
@@ -679,16 +679,16 @@ one. The code would look something like this:
       (create-logger config)))
 ```
 
-### Before, after, validation, and "channels"
+### Pre, post, validation, and "channels"
 
-You can define `before-` and `after-` handlers for signals:
+You can define `pre-` and `post-` handlers for signals:
 
 ``` clojure
 (def system
   {::ds/defs
-   {:app {:server #::ds{:before-start (fn [_] (prn "before-start"))
+   {:app {:server #::ds{:pre-start (fn [_] (prn "pre-start"))
                         :start        (fn [_] (prn "start"))
-                        :after-start  (fn [_] (prn "after-start"))}}}})
+                        :post-start  (fn [_] (prn "post-start"))}}}})
 ```
 
 You can use these _lifecycle handlers_ to gather information about your system
@@ -705,9 +705,9 @@ Here's how you might print signal progress:
 (def system
   {::ds/defs
    {:group {:component-a #::ds{:start       "component a"
-                               :after-start print-progress}
+                               :post-start print-progress}
             :component-b #::ds{:start       "component b"
-                               :after-start print-progress}}}})
+                               :post-start print-progress}}}})
 
 (ds/signal system ::ds/start)
 ;; =>
@@ -715,7 +715,7 @@ Here's how you might print signal progress:
 [:group :component-b]
 ```
 
-The function `print-progress` is used as the `:after-start` handler for both
+The function `print-progress` is used as the `:post-start` handler for both
 `:component-a` and `:component-b`. It destructures `::ds/system`, then prints
 `(::ds/component-id system)`.
 
@@ -726,22 +726,22 @@ into the system map under `::ds/component-id` prior to calling a signal handler.
 The handler argument also has a collection of "channel" functions merged into it
 which we can use to gather information about components and perform validation.
 Look at how we destructure `->info` and `->validation` from the third argument
-in these `:after-start` handlers:
+in these `:post-start` handlers:
 
 ``` clojure
 (def system
   {::ds/defs
    {:group {:component-a #::ds{:start       "component a"
-                               :after-start (fn [{:keys [->info]}]
+                               :post-start (fn [{:keys [->info]}]
                                               (->info "component a is valid"))}
             :component-b #::ds{:start       "component b"
-                               :after-start (fn [{:keys [->validation]}]
+                               :post-start (fn [{:keys [->validation]}]
                                               (->validation "component b is invalid"))
                                ;; This `:config` is only here to create the
                                ;; dependency order for demonstration purpose
                                :config      {:ref (ds/ref :component-a)}}
             :component-c #::ds{:start       "component-c"
-                               :after-start (fn [_]
+                               :post-start (fn [_]
                                               (prn "this won't print"))
                                ;; This `:config` is only here to create the
                                ;; dependency order for demonstration purpose
@@ -754,12 +754,12 @@ in these `:after-start` handlers:
  :validation {:group {:component-b "component b is invalid"}}}
 ```
 
-Notice that `:component-c`'s `:after-start` handler doesn't get called. As it
+Notice that `:component-c`'s `:post-start` handler doesn't get called. As it
 predicts, the string "this won't print" doesn't get printed.
 
 It's not obvious what's going on here, so let's step through it.
 
-1. `:component-a`'s `:after-start` gets called first. It destructures the
+1. `:component-a`'s `:post-start` gets called first. It destructures the
    `->info` function out of the third argument. `->info` is a _channel function_
    and its purpose is to allow signal handlers to place a value somewhere in the
    system map in a convenient and consistent way. `->info` assoc'd into the
@@ -771,14 +771,14 @@ It's not obvious what's going on here, so let's step through it.
    system map is conveyed forward to other components' signal handlers, until a
    final system map is returned by `ds/signal`.
    
-   But what if you want to use `:after-start` to perform a side effect? What
+   But what if you want to use `:post-start` to perform a side effect? What
    then?? Do these functions always have to return a system map?
    
    No. The rules for handling return values are:
    
    1. If a system map is returned, convey that forward
-   2. Otherwise, if this is a _lifecycle function_ (`::ds/before-start` or
-      `::ds/after-start`) ignore the return value
+   2. Otherwise, if this is a _lifecycle function_ (`::ds/pre-start` or
+      `::ds/post-start`) ignore the return value
    3. Otherwise, this is a signal handler (`:ds/start`). Place its return value
       under `::ds/instances`.
 3. `(->validation "component b is invalid")` is similar to `->info` in that it
@@ -804,10 +804,10 @@ One way you could make use of these features is to write something like this:
 
 (def system
   {::ds/defs
-   {:group {:component-a #::ds{:before-start validate-config
+   {:group {:component-a #::ds{:pre-start validate-config
                                :start        "component a"
                                :config       {:schema [:map [:foo any?] [:baz any?]]}}
-            :component-b #::ds{:before-start validate-config
+            :component-b #::ds{:pre-start validate-config
                                :start        "component b"
                                :config       {:schema [:map [:foo any?] [:baz any?]]}}
             :component-c #::ds{:start "component-c"}}}})
@@ -836,7 +836,7 @@ example could be rewritten like this:
       (->validation errors))))
 
 (def system
-  {::ds/base #::ds{:before-start validate-config}
+  {::ds/base #::ds{:pre-start validate-config}
    ::ds/defs
    {:group {:component-a {:start  "component a"
                           :schema [:map [:foo any?] [:baz any?]]}
