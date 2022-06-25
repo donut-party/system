@@ -1,8 +1,11 @@
 (ns donut.system.repl
   "reloaded repl tools"
-  (:require [clojure.tools.namespace.repl :as repl]
-            [donut.system :as ds]
-            [donut.system.repl.state :as state]))
+  (:require
+   [clojure.tools.namespace.repl :as repl]
+   [donut.system :as ds]
+   [donut.system.repl.state :as state])
+  (:import
+   [clojure.lang ExceptionInfo]))
 
 (defn signal
   [signal-name]
@@ -12,12 +15,16 @@
 
 (defn start
   [& args]
-  (alter-var-root #'state/system (fn [sys]
-                                   (when (and (ds/system? sys)
-                                              (not= ::ds/stop (::ds/last-signal sys)))
-                                     (ds/stop sys))
-                                   (apply ds/start :donut.system/repl args)))
-  ::ds/start)
+  (try
+    (alter-var-root #'state/system (fn [sys]
+                                     (when (and (ds/system? sys)
+                                                (not= ::ds/stop (::ds/last-signal sys)))
+                                       (ds/stop sys))
+                                     (apply ds/start :donut.system/repl args)))
+    ::ds/start
+    (catch ExceptionInfo e
+      (ds/stop-failed-system)
+      (throw e))))
 
 (defn stop
   []

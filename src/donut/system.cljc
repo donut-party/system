@@ -552,12 +552,13 @@
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
-  [_system computation-stage t]
+  [system computation-stage t]
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:component      (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
             :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))}
+                               :cljs (. t -message))
+            ::system        system}
            t))
 
 (defn- apply-signal-stage
@@ -776,6 +777,11 @@
 (defn suspend [system] (signal system ::suspend))
 (defn resume [system] (signal system ::resume))
 
+(defn stop-failed-system
+  "Will attempt to stop a system that threw an exception when starting"
+  []
+  (when-let [system (and *e (::system (ex-data *e)))]
+    (stop system)))
 
 ;;---
 ;;; component helpers
