@@ -48,6 +48,6 @@ workflows:
           filters:
             branches:
               only:
-                - main
+                - release
           requires:
             - test-and-build
