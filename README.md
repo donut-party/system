@@ -534,6 +534,18 @@ example, this would work:
 Note the second-to-last-line includes `(ds/ref [:env :http :port])` - this will
 correctly reference the HTTP port.
 
+As your system grows, you'll probably want to move components into separate
+namespaces. Your system map might then look something like this:
+
+``` clojure
+(def base-system
+  {::ds/defs
+   {:env {}
+
+    :http 
+    {:server  http/server
+     :handler http/handler}}})
+```
 
 ## Advanced usage
 
