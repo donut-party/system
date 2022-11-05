@@ -10,17 +10,6 @@ that introduces *system* and *component* abstractions to:
 - provide a light virtual environment for your application, making it easier to
   mock services for testing
 
-``` clojure
-;; deps.edn
-{club.donutpower/system {:mvn/version "0.0.165"}}
-
-;; lein
-[club.donutpower/system "0.0.165"]
-
-;; require
-[donut.system :as ds]
-```
-
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
