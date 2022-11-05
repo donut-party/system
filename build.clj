@@ -12,7 +12,7 @@
   (:require [clojure.tools.build.api :as b]
             [org.corfield.build :as bb]))
 
-(def lib 'club.donutpower/system)
+(def lib 'party.donut/system)
 (def version (format "0.0.%s" (b/git-count-revs nil)))
 
 (defn deploy "Deploy the JAR to Clojars"

@@ -1,5 +1,7 @@
 # donut.system
 
+[![Clojars Project](https://img.shields.io/clojars/v/party.donut/system.svg)](https://clojars.org/party.donut/system)
+
 donut.system is a dependency injection library for Clojure and ClojureScript
 that introduces *system* and *component* abstractions to:
 
@@ -218,7 +220,7 @@ stack printer again:
                               :config {:stack (ds/ref [:services :stack])}}}}})
 ```
 
-The last line includes `:stack (ds/ref [:services :stack])`. `ds/ref` is a
+The last line includes `{:stack (ds/ref [:services :stack])}`. `ds/ref` is a
 function that returns a vector of the form `[:donut.system/ref component-key]`,
 where `component-key` is a vector of the form `[group-name component-name]`.
 
@@ -229,6 +231,17 @@ on a `:stack` instance to function correctly. Therefore, when we send a
 
 Within `:printer`'s `:start` signal handler, `stack` refers to the atom created
 by the `:stack` component.
+
+Note that a ref must be _reachable_ for it to be resolved, meaning that it must
+be possible to use `(get-in system [::ds/defs :path :to :ref])` to retrieve the
+ref. Something like this wont' work:
+
+``` clojure
+{::ds/defs {:app {:printer #::ds{:start (fn [_] (ds/ref [:services :stack]))}}}}
+```
+
+It won't work because you `ds/ref` resides inside a function definition that
+isn't reachable by `get-in`.
 
 ### Constant instances
 
@@ -280,11 +293,11 @@ called in the correct order. I needed to convey the idea of "make all the
 components do a thing", and signal handling seemed like a good metaphor.
 
 Using the term "signal" could be misleading, though, in that it implies the use
-of a communication primitive like a socket, a semaphor, or an interrup. That's
-not the case. Internally, it's all just plain ol' function calls. If I talk
-about "sending" a signal, nothing's actually being sent. And anyway, even if
-something were getting sent, that shouldn't matter to you in using the library;
-it would be an implementation detail that should be transparent to you.
+of a communication primitive like a socket or a semaphor. That's not the case.
+Internally, it's all just plain ol' function calls. If I talk about "sending" a
+signal, nothing's actually being sent. And anyway, even if something were
+getting sent, that shouldn't matter to you in using the library; it would be an
+implementation detail that should be transparent to .
 
 donut.system provides some sugar for built-in signals: instead of calling
 `(ds/signal system ::ds/start)` you can call `(ds/start system)`.
@@ -330,7 +343,7 @@ map, which is:
 
 ### Systems
 
-Systems organize components and provide a consistent way to initiating component
+Systems organize components and provide a consistent way to initiate component
 behavior. You send a signal to a system, and the system ensures its components
 handle the signal in the correct order.
 
@@ -1051,10 +1064,10 @@ TODO
 
 donut.system takes inspiration from Component, Integrant, and Clip.
 
-## Status: 🤔
+## Status: alpha
 
-This library hasn't been used in production. I'm hoping some folks will find it
-interesting and want to try it out so that we can work out kinks and improve it.
+This library has been used in production but is not widely used. The interfaces
+may change, but change is unlikely.
 
 ## Community
 
