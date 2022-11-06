@@ -43,7 +43,7 @@ that introduces *system* and *component* abstractions to:
 - [Composing systems](#composing-systems)
 - [Creating multiple instances of groups of components](#creating-multiple-instances-of-groups-of-components)
 - [Acknowledgments](#acknowledgments)
-- [Status: 🤔](#status-)
+- [Status: alpha](#status-alpha)
 - [Community](#community)
 - [TODO](#todo)
 
