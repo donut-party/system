@@ -49,7 +49,7 @@ that introduces *system* and *component* abstractions to:
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## Basic Usage
+# Basic Usage
 
 To use donut.system, you define a _system_ that contains _component
 definitions_. A component definition can include _references_ to other
@@ -108,7 +108,7 @@ You start the system by calling `(ds/signal system ::ds/start)`. This produces a
 updated system map (bound to `running-system`) which you then use when stopping
 the system with `(ds/signal running-system :stop)`.
 
-### Components
+## Components
 
 Components have _definitions_ and _instances._
 
@@ -182,7 +182,7 @@ You don't have to define a handler for every signal. Components that don't have
 a handler for a signal are essentially skipped when you send a signal to a
 system.
 
-### Refs
+## Refs
 
 Component defs can contains _refs_, references to other components that resolve
 to that component's instance when signal handlers are called. Let's look at our
@@ -221,6 +221,15 @@ on a `:stack` instance to function correctly. Therefore, when we send a
 Within `:printer`'s `:start` signal handler, `stack` refers to the atom created
 by the `:stack` component.
 
+### Deep refs
+
+If you have a component `[:group-a :component-a]` whose instance is a map like
+`{:level-1 {:level-2 {:level-3 ...}}}` then you can refer to values within the
+map with a ref like `(ds/ref [:group-a :component-a :level-1 :level-2
+:level-3])`.
+
+### Refs must be reachable
+
 Note that a ref must be _reachable_ for it to be resolved, meaning that it must
 be possible to use `(get-in system [::ds/defs :path :to :ref])` to retrieve the
 ref. Something like this wont' work:
@@ -232,7 +241,7 @@ ref. Something like this wont' work:
 It won't work because you `ds/ref` resides inside a function definition that
 isn't reachable by `get-in`.
 
-### Constant instances
+## Constant instances
 
 If a component is defined using any value other than a map that contains the
 `:donut.system/start` key, that value is considered to be the component's
@@ -273,7 +282,7 @@ It would be annoying and possibly confusing to have to write something like
    {:env {:http-port #::ds{:start (constantly 8080)}}}})
 ```
 
-### Signals
+## Signals
 
 We've seen how you can specify signal handlers for components, but what is a
 signal? The best way to understand them is behaviorally: when you call the
@@ -291,7 +300,7 @@ implementation detail that should be transparent to .
 donut.system provides some sugar for built-in signals: instead of calling
 `(ds/signal system ::ds/start)` you can call `(ds/start system)`.
 
-### Custom signals
+## Custom signals
 
 There's a more interesting reason for the use of _signal_, though: I want signal
 handling to be extensible. Other component libraries use the term _lifecycle_,
@@ -330,7 +339,7 @@ map, which is:
    ::resume  {:order :reverse-topsort}})
 ```
 
-### Systems
+## Systems
 
 Systems organize components and provide a consistent way to initiate component
 behavior. You send a signal to a system, and the system ensures its components
@@ -350,7 +359,7 @@ map" approach. In the mean time, [this Lambda Island blog post on Coffee
 Grinders](https://lambdaisland.com/blog/2020-03-29-coffee-grinders-2) does a
 good job of explaining it.
 
-### Config helpers
+## Config helpers
 
 `donut.system/named-system` is a multimethod you can use to register system
 maps. This can be useful for defining dev, test, and prod systems:
@@ -411,7 +420,7 @@ The `start` helper also takes an optional third argument to select a subset of c
 
 Component selection is explained below.
 
-### Reloaded REPL workflow
+## Reloaded REPL workflow
 
 The `donut.system.repl` has conveniences for REPL workflows. To take advantage
 of it, first create a named-config with the name `:donut.system/repl`:
@@ -430,7 +439,7 @@ Calling `donut.system.repl/start` will start this system.
 
 This will reload any changed files and then start your system again.
 
-### Handling Failures
+## Handling Failures
 
 As you develop your project, it's likely an exception will get thrown when
 you're trying to start your system. This can cause some resources to be claimed
@@ -452,7 +461,7 @@ You can try to stop a failed system with the function
 If you're trying to start a system using `donut.system.repl/start`, it will
 automatically try to stop a failed system if an exception gets thrown.
 
-### Organization and configuration
+## Organization and configuration
 
 Where do you actually put your donut.system-related code? And how do you
 handle configuration?
@@ -549,13 +558,13 @@ namespaces. Your system map might then look something like this:
      :handler http/handler}}})
 ```
 
-## Advanced usage
+# Advanced usage
 
 The topics covered so far should let you get started defining components and
 systems in your own projects. donut.system can also handle more complex use
 cases.
 
-### Groups and local refs
+## Groups and local refs
 
 All component definitions are organized into groups. As someone who compulsively
 lines up pens and straightens stacks of brochures, I think this extra level of
@@ -619,7 +628,7 @@ without groups, sure, but it would be more tedious and typo-prone. The fact is,
 some components actually are part of a group, so it makes sense to have
 first-class support for groups.
 
-### Selecting components
+## Selecting components
 
 You can select parts of a system to send a signal to:
 
@@ -645,7 +654,7 @@ selection, like so:
 (ds/signal system ::ds/start #{:group-1})
 ```
 
-### Stages
+## Stages
 
 It might be useful to signal parts of your system in stages. For example, you
 might want to instantiate a logger and error reporter and use those if an
@@ -681,7 +690,7 @@ one. The code would look something like this:
       (create-logger config)))
 ```
 
-### Pre, post, validation, and "channels"
+## Pre, post, validation, and "channels"
 
 You can define `pre-` and `post-` handlers for signals:
 
@@ -819,7 +828,7 @@ We can create a generic `validate-component` function that checks whether a
 component's definition contains a `:schema` key, and use that to validate the
 rest of the component definition.
 
-### ::ds/base
+## ::ds/base
 
 You can add `::ds/base` key to a system map to define a "base" component
 definition that will get merged with the rest of your component defs. The last
@@ -847,7 +856,7 @@ example could be rewritten like this:
             :component-c {:start "component-c"}}}})
 ```
 
-### Subsystems
+## Subsystems
 
 Woe be unto you if you ever have to compose a system from subsystems. But if you
 do, I've tried to make it straightforward. Check it out:
@@ -909,7 +918,7 @@ responsible for forwarding all other signals to the subsystem.
 should be imported into the subsystem. This is how the subsystems can reference
 the parent system's component `[:services :stack]`.
 
-## Purpose
+# Purpose
 
 Now that we've covered how to use the library, let's talk about why you'd use
 it.
@@ -924,7 +933,7 @@ that don't have obvious answers:
 donut.system helps you address these problems by giving you tools for
 encapsulating behavior in *components* and composing components into *systems*.
 
-### Architecture aid
+## Architecture aid
 
 We can make application code more understandable and maintainable by identifying
 a system's responsibilities and organizing code around those responsibilities so
@@ -956,7 +965,7 @@ Components also aid discoverability. A system definition serves as a map that
 outlines the major "territories" of functionality, as well the entry point to
 each.
 
-### Resource management
+## Resource management
 
 donut.system helps allocate and deallocate resources like database connections
 and thread pools in the correct order. It also provides a systematic approach to
@@ -974,7 +983,7 @@ work is not central to whatever business problem you're trying to solve, but it
 still has to get done, so it's nice to be able to use a tool that does that work
 for you that you can learn once and use across different projects.
 
-### Virtual environment
+## Virtual environment
 
 donut.system (and other component libraries) provide a kind of light-weight
 virtual environment for your application. Usually there's one-to-one
@@ -987,7 +996,7 @@ the same time. I can start a dev system with an HTTP server and a dev db
 connection from the REPL, and from the same REPL run integration tests with a
 separate HTTP server and db connection. It's a huge workflow improvement.
 
-### Framework foundation
+## Framework foundation
 
 donut.system's component definitions are _just data_, which means that it's
 possible for libraries to provide components that work with donut.system without
@@ -1019,7 +1028,7 @@ Whether or not this is actually a good idea remains to be seen, but my hope is
 that it will provide a better foundation for writing higher-level, composable
 libraries.
 
-## Objections
+# Objections
 
 Over the years, I've encountered two main objections to this approach:
 
@@ -1028,7 +1037,7 @@ Over the years, I've encountered two main objections to this approach:
 
 TODO address these concerns. (They're not necessarily wrong!)
 
-## Alternatives
+# Alternatives
 
 Other Clojure libraries in the same space:
 
@@ -1037,33 +1046,33 @@ Other Clojure libraries in the same space:
 - [Component](https://github.com/stuartsierra/component)
 - [Clip](https://github.com/juxt/clip)
 
-## Why use this and not that?
+# Why use this and not that?
 
 I cover how donut.system compares to the alternatives in [docs/rationale.org](docs/rationale.org).
 
-## Composing systems
+# Composing systems
 
 TODO
 
-## Creating multiple instances of groups of components
+# Creating multiple instances of groups of components
 
 TODO
 
-## Acknowledgments
+# Acknowledgments
 
 donut.system takes inspiration from Component, Integrant, and Clip.
 
-## Status: alpha
+# Status: alpha
 
 This library has been used in production but is not widely used. The interfaces
 may change, but change is unlikely.
 
-## Community
+# Community
 
 PRs welcome! Also check out the #donut channel in Clojurians Slack if you wanna
 chat or if you have questions.
 
-## TODO
+# TODO
 
 - async signal handling
 - more examples
