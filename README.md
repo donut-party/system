@@ -1069,8 +1069,9 @@ may change, but change is unlikely.
 
 # Community
 
-PRs welcome! Also check out the #donut channel in Clojurians Slack if you wanna
-chat or if you have questions.
+PRs welcome! Also check out the [#donut channel in Clojurians
+Slack](https://clojurians.slack.com/archives/C030C4Z2W0Y) if you wanna chat or
+if you have questions.
 
 # TODO
 

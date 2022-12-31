@@ -371,9 +371,33 @@
                     ::ds/signals (merge ds/default-signals {:foo {:order :topsort}})}
                    :foo))))
 
-(deftest required-component
+(deftest required-component-test
   (is (thrown?
        #?(:clj clojure.lang.ExceptionInfo
           :cljs js/Object)
        (ds/signal {::ds/defs {:group {:component ds/required-component}}}
                   ::ds/start))))
+
+(deftest get-registry-instance-test
+  (let [system (-> {::ds/registry {:the-boop [:app :boop]}
+                    ::ds/defs {:app {:boop #::ds{:start "no boop"}}}}
+                   (ds/start))]
+    (is (= "no boop" (ds/registry-instance system :the-boop)))))
+
+(deftest registry-instance-exception-test
+  (is (thrown-with-msg?
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
+       #":donut.system/registry does not contain registry-key"
+       (-> {::ds/defs {:group {:component "constant"}}}
+           ds/start
+           (ds/registry-instance :no-registry-key))))
+
+  (is (thrown-with-msg?
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
+       #"No component instance found for registry key."
+       (-> {::ds/registry {:a-key [:bad :path]}
+            ::ds/defs {:group {:component "constant"}}}
+           ds/start
+           (ds/registry-instance :a-key)))))

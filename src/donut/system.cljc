@@ -792,3 +792,21 @@
   {::start (fn [_ _ {:keys [::component-id]}]
              (throw (ex-info "Need to define required component"
                              {:component-id component-id})))})
+
+(defn registry-instance
+  "Returns a component instance for a given key, rather than a given path. Relies
+  on ::registry mapping registry keys to component paths.
+
+  For cases where libraries want to use component instances without having to
+  rely on hard-coded paths."
+  [system registry-key]
+  (if-let [component-path (get-in system [::registry registry-key])]
+    (if-let [component-instance (get-in system (into [::instances] component-path))]
+      component-instance
+      (throw (ex-info "No component instance found for registry key.
+Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
+                      {:registry-key   registry-key
+                       :component-path component-path})))
+    (throw (ex-info ":donut.system/registry does not contain registry-key
+Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
+                    {:registry-key registry-key}))))
