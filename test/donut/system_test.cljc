@@ -376,7 +376,12 @@
        #?(:clj clojure.lang.ExceptionInfo
           :cljs js/Object)
        (ds/signal {::ds/defs {:group {:component ds/required-component}}}
-                  ::ds/start))))
+                  ::ds/start)))
+  (try (ds/signal {::ds/defs {:group {:component ds/required-component}}}
+                  ::ds/start)
+       (catch Exception e
+         (is (= [:group :component]
+                (:component (ex-data e)))))))
 
 (deftest get-registry-instance-test
   (let [system (-> {::ds/registry {:the-boop [:app :boop]}
@@ -401,3 +406,49 @@
             ::ds/defs {:group {:component "constant"}}}
            ds/start
            (ds/registry-instance :a-key)))))
+
+(deftest component-ids-test
+  (is (= [[:group-a :a]
+          [:group-a :b]
+          [:group-b :a]
+          [:group-b :b]
+          [:group-b :c]]
+         (ds/component-ids {::ds/defs {:group-a {:a nil
+                                                 :b nil}
+                                       :group-b {:a nil
+                                                 :b nil
+                                                 :c nil}}}))))
+
+(deftest status-signal-test
+  (is (= {:group-a {:a :status-a}}
+         (::ds/status
+          (ds/signal {::ds/defs
+                      {:group-a
+                       {:a #::ds{:status (fn [_] :status-a)}}}}
+                     ::ds/status)))))
+
+(deftest describe-system-test
+  (is (= {:group-a
+          {:a
+           {:name            [:group-a :a]
+            :config          nil
+            :resolved-config nil
+            :instance        ["a-component"]
+            :status          :status-a
+            :doc             "a component doc"
+            :dependencies    #{}}
+           :b
+           {:name            [:group-a :b]
+            :config          nil
+            :resolved-config nil
+            :instance        "b-component"
+            :status          :b-component
+            :doc             nil
+            :dependencies    #{}}}}
+         (ds/describe-system
+          (ds/start
+           {::ds/defs {:group-a {:a #::ds{:start  (with-meta ["a-component"] {:doc "a component doc"})
+                                          :status (fn [_] :status-a)}
+                                 :b #::ds{:start  (fn [_] "b-component")
+                                          :status (fn [{:keys [::ds/instance] :as x}]
+                                                    (keyword instance))}}}})))))
