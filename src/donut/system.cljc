@@ -8,8 +8,7 @@
    [loom.graph :as lg]
    [malli.core :as m]
    [malli.error :as me]
-   [clojure.zip :as zip])
-  (:import [clojure.lang MapEntry]))
+   [clojure.zip :as zip]))
 
 ;;---
 ;; helpers
@@ -275,7 +274,7 @@
    (fn [x] (or (map? x) (sequential? x)))
    seq
    (fn [p xs]
-     (if (isa? (type p) MapEntry)
+     (if (and p (map-entry? p))
        (into [] xs)
        (into (empty p) xs)))
    m))

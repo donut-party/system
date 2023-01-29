@@ -379,7 +379,7 @@
                   ::ds/start)))
   (try (ds/signal {::ds/defs {:group {:component ds/required-component}}}
                   ::ds/start)
-       (catch Exception e
+       (catch #?(:clj Exception :cljs :default) e
          (is (= [:group :component]
                 (:component (ex-data e)))))))
 
