@@ -49,8 +49,8 @@
 (def Component
   (->> default-signals
        keys
-       (mapv (fn [k] [k {:optional true} any?]))
-       (into [:map])))
+       (mapv (fn [k] [:map [k any?]]))
+       (into [:or])))
 
 (def ComponentLike
   "Component-like data shows up in `::defs`, `::resolved-defs`, and `::instances`. None

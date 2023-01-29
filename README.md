@@ -65,22 +65,24 @@ item off the `:stack` and prints it once a second:
 
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{{:keys [items]} ::ds/config}]
-                                      (atom (vec (range items))))
-                            :stop   (fn [{::ds/keys[instance]}]
-                                      (reset! instance []))
-                            :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{{:keys [stack]} ::ds/config}]
-                                        (doto (Thread.
-                                               (fn []
-                                                 (prn "peek:" (peek @stack))
-                                                 (swap! stack pop)
-                                                 (Thread/sleep 1000)
-                                                 (recur)))
-                                          (.start)))
-                              :stop   (fn [{::ds/keys [instance]}]
-                                        (.interrupt instance))
-                              :config {:stack (ds/ref [:services :stack])}}}}})
+   {:services
+    {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
+                            (atom (vec (range (:items config)))))
+                  :config {:items 10}}}
+
+    :app
+    {:printer #::ds{:start  (fn [opts]
+                              (let [stack (get-in opts [::ds/config :stack])]
+                                (future
+                                  (loop []
+                                    (prn "peek:" (peek @stack))
+                                    (swap! stack pop)
+                                    (Thread/sleep 1000)
+                                    (recur)))))
+                    :stop   (fn [{:keys [::ds/instance]}]
+                              (prn "stopping")
+                              (future-cancel instance))
+                    :config {:stack (ds/ref [:services :stack])}}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
 (comment
@@ -100,7 +102,7 @@ In this example, you define `system`, a map that contains just one key,
 and `:services` are arbitrary names with no special meaning; you can name groups
 whatever you want.)
 
-Both component definitions contain `::ds/start` and `::ds/stop` signal handlers,
+Component definitions can contain `::ds/start` and `::ds/stop` signal handlers,
 as well as a `::ds/config`. The `:printer` component's `:ds/config` contains a
 _ref_ to the `:stack` component.
 
@@ -119,7 +121,6 @@ this system with a single component definition shows:
 ``` clojure
 (def Stack
   #::ds{:start  (fn [{{:keys [items]} ::ds/config}] (atom (vec (range items))))
-        :stop   (fn [{::ds/keys [instance]}] (reset! instance []))
         :config {:items 10}})
 
 (def system {::ds/defs {:services {:stack Stack}}})
@@ -137,9 +138,9 @@ A def map can contain _signal handlers_, which are used to create component
 _instances_ and implement component behavior. A def can also contain additional
 configuration values that will get passed to the signal handlers.
 
-In the example above, we've defined `::ds/start` and `::ds/stop` signal
-handlers. Signal handlers are just functions with one argument, a map. What is
-included in this map?
+In the example above, we've defined a `::ds/start` signal handlers. Signal
+handlers are just functions with one argument, a map. What is included in this
+map?
 
 This map includes the key `::ds/config`, and its value is taken from the
 `::ds/config` key in your component definition. In the example above, that means
@@ -191,22 +192,24 @@ stack printer again:
 ``` clojure
 (def system
   {::ds/defs
-   {:services {:stack #::ds{:start  (fn [{{:keys [items]} ::ds/config}]
-                                      (atom (vec (range items ))))
-                            :stop   (fn [{::ds/keys [instance]}]
-                                      (reset! instance []))
-                            :config {:items 10}}}
-    :app      {:printer #::ds{:start  (fn [{{:keys [stack]} ::ds/config}]
-                                        (doto (Thread.
-                                               (fn []
-                                                 (prn "peek:" (peek @stack))
-                                                 (swap! stack pop)
-                                                 (Thread/sleep 1000)
-                                                 (recur)))
-                                          (.start)))
-                              :stop   (fn [{::ds/keys [instance]}]
-                                        (.interrupt instance))
-                              :config {:stack (ds/ref [:services :stack])}}}}})
+   {:services
+    {:stack #::ds{:start  (fn [{:keys [::ds/config]}]
+                            (atom (vec (range (:items config)))))
+                  :config {:items 10}}}
+
+    :app
+    {:printer #::ds{:start  (fn [opts]
+                              (let [stack (get-in opts [::ds/config :stack])]
+                                (future
+                                  (loop []
+                                    (prn "peek:" (peek @stack))
+                                    (swap! stack pop)
+                                    (Thread/sleep 1000)
+                                    (recur)))))
+                    :stop   (fn [{:keys [::ds/instance]}]
+                              (prn "stopping")
+                              (future-cancel instance))
+                    :config {:stack (ds/ref [:services :stack])}}}}})
 ```
 
 The last line includes `{:stack (ds/ref [:services :stack])}`. `ds/ref` is a
