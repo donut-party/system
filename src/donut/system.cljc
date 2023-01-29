@@ -1,20 +1,55 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require
+   [clojure.walk :as walk]
    [com.rpl.specter :as sp]
    [loom.alg :as la]
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
-   [malli.error :as me]))
+   [malli.error :as me]
+   [clojure.zip :as zip]))
+
+;;---
+;; helpers
+;;---
+
+(defn flat-get-in
+  [m p]
+  (get-in m (flatten p)))
+
+(defn flat-assoc-in
+  [m p v]
+  (assoc-in m (vec (flatten p)) v))
+
+(defn component-ids
+  [{:keys [::defs]}]
+  (for [k1 (keys defs)
+        k2 (keys (get defs k1))]
+    [k1 k2]))
 
 ;;---
 ;;; specs
 ;;---
 
+(def default-signals
+  "which graph sort order to follow to apply signal, and where to put result"
+  {::start   {:order      :reverse-topsort
+              :result-key ::instances}
+   ::stop    {:order      :topsort
+              :result-key ::instances}
+   ::suspend {:order      :topsort
+              :result-key ::instances}
+   ::resume  {:order      :reverse-topsort
+              :result-key ::instances}
+   ::status  {:order      :reverse-topsort
+              :result-key ::status}})
+
 (def Component
-  [:map
-   [::start any?]])
+  (->> default-signals
+       keys
+       (mapv (fn [k] [:map [k any?]]))
+       (into [:or])))
 
 (def ComponentLike
   "Component-like data shows up in `::defs`, `::resolved-defs`, and `::instances`. None
@@ -101,7 +136,7 @@
 ;;---
 
 (def ref? (m/validator DonutRef))
-(def ref-type first)
+(def ref-type (fn [v] (when (seqable? v) (first v))))
 
 (defn ref [k] [::ref k])
 (defn local-ref [k] [::local-ref k])
@@ -118,7 +153,14 @@
        (take 2)
        vec))
 
-(def component? (m/validator Component))
+(def MinComponent
+  "Check that at least one of the signals is present"
+  (->> default-signals
+       keys
+       (mapv (fn [k] [:map [k any?]]))
+       (into [:or])))
+
+(def component? (m/validator MinComponent))
 ;;---
 ;;; util/ helpers / misc
 ;;---
@@ -201,31 +243,72 @@
       (throw (ref-exception system
                             referencing-component-id
                             (component-id ref))))
-    (sp/select-one [::instances rkey] system)))
+    (flat-get-in system [::instances rkey])))
+
+;; ref resolution zipping
+
+(defn- skip-system-next
+  [loc]
+  (if (= :end (loc 1))
+    loc
+    (or
+     (zip/right loc)
+     (loop [p loc]
+       (if (zip/up p)
+         (or (zip/right (zip/up p)) (recur (zip/up p)))
+         [(zip/node p) :end])))))
+
+(defn- zip-walk [f z]
+  (cond
+    (zip/end? z)
+    (zip/root z)
+
+    (system? (zip/node z))
+    (recur f (skip-system-next z))
+
+    :else
+    (recur f (zip/next (f z)))))
+
+(defn- map-vec-zipper [m]
+  (zip/zipper
+   (fn [x] (or (map? x) (sequential? x)))
+   seq
+   (fn [p xs]
+     (if (and p (map-entry? p))
+       (into [] xs)
+       (into (empty p) xs)))
+   m))
+
+(defn- resolve-component-refs [system component-def component-id]
+  (let [zipper (map-vec-zipper component-def)]
+    (zip-walk (fn [loc]
+                (let [node (zip/node loc)
+                      rt   (ref-type node)]
+                  (cond
+                    (= ::ref rt)
+                    (zip/replace
+                     loc
+                     (resolve-ref system component-id node))
+
+                    (= ::local-ref rt)
+                    (zip/replace
+                     loc
+                     (resolve-ref system component-id (ref (into [(first component-id)]
+                                                                 (ref-key node)))))
+
+                    :else
+                    loc)))
+              zipper)))
 
 (defn- default-resolve-refs
-  "for all refs R within component def D, replaces R with the instance of the
-  component that R refers to. places the result in `::resolved-defs`"
   [system component-id]
-  (->> system
-       (sp/setval [::resolved-defs component-id]
-                  (sp/select-one [::defs component-id] system))
-       (sp/transform [::resolved-defs component-id (sp/walker (some-fn ref? system?))]
-                     (fn [ref-or-system]
-                       (let [rt (ref-type ref-or-system)]
-                         (cond
-                           ;; don't descend into subsystems
-                           (system? ref-or-system)
-                           ref-or-system
+  (-> system
+      (flat-assoc-in [::resolved-defs component-id] (flat-get-in system [::defs component-id]))
+      (update-in
+       (into [::resolved-defs] component-id)
+       #(resolve-component-refs system % component-id))))
 
-                           (= ::ref rt)
-                           (resolve-ref system component-id ref-or-system)
-
-                           ;; local refs get converted to a regular ref by using
-                           ;; the group name of the current component
-                           (= ::local-ref rt)
-                           (resolve-ref system component-id (ref (into [(first component-id)]
-                                                                       (ref-key ref-or-system))))))))))
+;; end ref resolution zipping
 
 (defn- resolve-refs
   "produces an updated component def where refs are replaced by the instance of
@@ -257,7 +340,7 @@
 (defn- component-graph-nodes
   [system]
   (->> system
-       (sp/select [config-collect-group-path sp/MAP-KEYS])
+       component-ids
        (reduce (fn [graph node]
                  (lg/add-nodes graph node))
                (lg/digraph))))
@@ -345,13 +428,6 @@
     (-> system
         (assoc-in [::graphs :topsort] selected)
         (assoc-in [::graphs :reverse-topsort] reversed))))
-
-(def default-signals
-  "which graph to follow to apply signal"
-  {::start   {:order :reverse-topsort}
-   ::stop    {:order :topsort}
-   ::suspend {:order :topsort}
-   ::resume  {:order :reverse-topsort}})
 
 ;;---
 ;;; channel fns
@@ -527,10 +603,11 @@
                     (constantly signal-fn))]
 
     (fn [system]
-      (let [stage-result (apply-stage-fn system signal-fn component-id)]
+      (let [stage-result (apply-stage-fn system signal-fn component-id)
+            result-key   (get-in system [::signals (last computation-stage-node) :result-key])]
         (if (system? stage-result)
           stage-result
-          (sp/setval [::instances component-id] stage-result system))))))
+          (assoc-in system (into [result-key] component-id) stage-result))))))
 
 (defn- computation-stage-fn
   [system [_ _ stage :as computation-stage-node]]
@@ -788,10 +865,61 @@
 ;;---
 
 (def required-component
-  "Communicates that a component needs to be provided."
-  {::start (fn [_ _ {:keys [::component-id]}]
+  "A placeholder component used to communicate that a component needs to be
+  provided."
+  {::start (fn [{:keys [::system]}]
              (throw (ex-info "Need to define required component"
-                             {:component-id component-id})))})
+                             {:component-id (::component-id system)})))})
+
+(defn instance
+  "Get a specific component instance"
+  ([system]
+   (into {}
+         (for [[k m] (::instances system)]
+           [k (set (keys m))])))
+  ([system component-path]
+   (flat-get-in system [::instances  component-path])))
+
+(defn component-doc
+  [system component-id]
+  (or (:doc (meta (instance system component-id)))
+      (flat-get-in system [::defs component-id ::doc])))
+
+(defn component-dependencies
+  "Set of all references to other components"
+  [system component-id]
+  (let [deps (atom [])]
+    (walk/postwalk (fn [x]
+                     (when (ref? x)
+                       (swap! deps conj x))
+                     x)
+                   (flat-get-in system [::defs component-id]))
+    (->> @deps
+         (map (fn [[reftype ref]]
+                (if (= reftype ::local-ref)
+                  (into [(first component-id)] ref)
+                  ref)))
+         (set))))
+
+(defn describe-component
+  [system component-id]
+  {:name            component-id
+   :config          (flat-get-in system [::defs component-id ::config])
+   :resolved-config (flat-get-in system [::resolved-defs component-id ::config])
+   :instance        (instance system component-id)
+   :status          (flat-get-in system [::status component-id])
+   :doc             (component-doc system component-id)
+   :dependencies    (component-dependencies system component-id)})
+
+(defn describe-system
+  [system]
+  (let [system (signal system ::status)]
+    (reduce (fn [m component-id]
+              (assoc-in m component-id (describe-component system component-id)))
+            {}
+            (component-ids system))))
+
+;; describe-system, dep-graph
 
 (defn registry-instance
   "Returns a component instance for a given key, rather than a given path. Relies
@@ -801,7 +929,7 @@
   rely on hard-coded paths."
   [system registry-key]
   (if-let [component-path (get-in system [::registry registry-key])]
-    (if-let [component-instance (get-in system (into [::instances] component-path))]
+    (if-let [component-instance (instance system component-path)]
       component-instance
       (throw (ex-info "No component instance found for registry key.
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."

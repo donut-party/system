@@ -1,6 +1,7 @@
 (ns donut.system.repl
   "reloaded repl tools"
   (:require
+   [clojure.pprint :as pprint]
    [clojure.tools.namespace.repl :as repl]
    [donut.system :as ds]
    [donut.system.repl.state :as state])
@@ -38,3 +39,13 @@
 (defn clear!
   []
   (alter-var-root #'state/system (constantly nil)))
+
+(defn instance
+  "Retrieve instance from started system"
+  ([]
+   (ds/instance state/system))
+  ([component-path]
+   (if-let [component-instance (ds/instance state/system component-path)]
+     component-instance
+     (do (prn "Could not find instance at " component-path)
+         (pprint/pprint (instance))))))
