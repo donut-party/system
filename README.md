@@ -2,13 +2,36 @@
 
 [![Clojars Project](https://img.shields.io/clojars/v/party.donut/system.svg)](https://clojars.org/party.donut/system)
 
-donut.system is a dependency injection library for Clojure and ClojureScript
-that introduces *system* and *component* abstractions to:
+As a developer, one of your tasks is decomposing a system into logically
+coherent, reusable, loosely-coupled components that can be understood and tested
+in isolation. Another task is coordinating these components, composing them in a
+way that&rsquo;s coherent, such that the system as a whole remains
+comprehensible and it&rsquo;s possible to grow, debug, and maintain the system
+with minimal confusion.
 
-- help you organize your application
-- manage your application's startup and shutdown behavior
-- provide a light virtual environment for your application, making it easier to
-  mock services for testing
+donut.system is a *depdendency injection* library that helps you manage this
+source of complexity. It helps you in the following ways:
+
+- It provides *system* and *component* abstractions
+- It provides a means of composing components
+- It provides a structure for defining component behavior
+- It makes loose coupling possible
+- It makes it easier to test your system
+- It aids in understanding the scope of your system and how the pieces interact
+
+Examples of components you might need in your system include:
+
+- A database threadpool
+- A messaging or queueing system
+- A job scheduler
+
+Something that all these components have in common is that they have stateful
+behaviors, claiming resources like threads and reading and writing to other
+resources. They could also have dependencies that determine the order in which
+they're started and stopped: your job scheduler might use your database as its
+data store, and therefore can't be started until after your db threadpool is
+created. donut.system makes sure that these behaviors happen in the correct
+order.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -51,9 +74,54 @@ that introduces *system* and *component* abstractions to:
 
 # Basic Usage
 
-To use donut.system, you define a _system_ that contains _component
-definitions_. A component definition can include _references_ to other
-components and _signal handlers_ that specify behavior. 
+To understand donut.system, we're going to define a single _component_. Then we're
+going to place that component in a _system_, and after that we're going to
+_start_ and _stop_ the system. Finally, we're going to look at a 2-component
+system to see how component dependencies work.
+
+To use donut.system, you define a _system_ that contains _component groups_.
+Component groups contain _component definitions_. Component definitions include
+_signal handlers_ that specify component behaviors.
+
+Here's an example of a component definition:
+
+``` clojure
+
+```
+
+
+Here's an example that defines an `:app` component group and a `:printer`
+component. The names `:app` and `:printer` have no special significance; you
+choose whatever names make the most sense for you:
+
+```clojure
+(ns donut.examples.single-component
+  (:require
+   [donut.system :as ds]))
+
+(def system
+  {::ds/defs
+   {:app {:printer #::ds{:start (fn [_]
+                                  (future
+                                    (loop []
+                                      (println "hello!")
+                                      (Thread/sleep 1000)
+                                      (recur))))
+                         :stop  (fn [{:keys [::ds/instance]}]
+                                  (future-cancel instance))}}}})
+
+;; start the system, let it run for 5 seconds, then stop it
+(comment
+  (let [running-system (ds/signal system ::ds/start)]
+    (Thread/sleep 5000)
+    (ds/signal running-system ::ds/stop)))
+```
+
+You start the system by calling `(ds/signal system ::ds/start)`. `ds/signal`
+returns an updated system map, and here we've bound it to `running-system`. We
+stop the system with `(ds/signal running-system :stop)`.
+
+
 
 Here's an example system that defines a `:printer` component and a `:stack`
 component. When the system receives the `:donut.system/start` signal, the `:printer` pops an
