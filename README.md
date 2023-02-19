@@ -225,6 +225,8 @@ You start the system by calling `(ds/signal system ::ds/start)`. This produces a
 updated system map (bound to `running-system`) which you then use when stopping
 the system with `(ds/signal running-system :stop)`.
 
+The rest of this README covers donut.system's pieces in more detail.
+
 ## Components
 
 Components have _definitions_ and _instances._
@@ -338,6 +340,18 @@ on a `:stack` instance to function correctly. Therefore, when we send a
 
 Within `:printer`'s `:start` signal handler, `stack` refers to the atom created
 by the `:stack` component.
+
+When you call `(ds/signal system ::ds/start)`, the following happens:
+
+1. The `::ds/start` signal handler for `[:services :stack]` gets called. It
+   returns an atom, which becomes the component instance for `[:services
+   :stack]`.
+2. Internally, that atom is added to the system map under `[::ds/instances
+   :services :stack]`.
+3. The `::ds/start` signal handler for `[:app :printer]` gets called with a
+   single argument, a map. That map includes the key path `[::ds/config
+   :stack]`, and its value is the component instance for `[:services :stack]` --
+   the atom created at step 1.
 
 ### Deep refs
 
