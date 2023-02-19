@@ -2,13 +2,37 @@
 
 [![Clojars Project](https://img.shields.io/clojars/v/party.donut/system.svg)](https://clojars.org/party.donut/system)
 
-donut.system is a dependency injection library for Clojure and ClojureScript
-that introduces *system* and *component* abstractions to:
+As a developer, one of your tasks is decomposing an application into logically
+coherent, reusable, loosely-coupled components that can be understood and tested
+in isolation. Another task is coordinating these components, composing them in a
+way that&rsquo;s coherent, such that the system as a whole remains
+comprehensible and it&rsquo;s possible to grow, debug, and maintain the
+application with minimal confusion.
 
-- help you organize your application
-- manage your application's startup and shutdown behavior
-- provide a light virtual environment for your application, making it easier to
-  mock services for testing
+donut.system is a *depdendency injection* library that helps you manage this
+source of complexity. It helps you in the following ways:
+
+- It provides *system* and *component* abstractions that give your application
+  a comprehensible structure
+- It provides a means of composing components
+- It provides a structure for defining component behavior
+- It makes loose coupling possible
+- It makes it easier to test your system
+- It aids in understanding the scope of your system and how the pieces interact
+
+Examples of components you might need in your system include:
+
+- A database threadpool
+- A messaging or queueing system
+- A job scheduler
+
+Something that all these components have in common is that they have stateful
+behaviors, claiming resources like threads and reading and writing to other
+resources. They could also have dependencies that determine the order in which
+they're started and stopped: your job scheduler might use your database as its
+data store, and therefore can't be started until after your db threadpool is
+created. donut.system makes sure that these behaviors happen in the correct
+order.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -51,13 +75,109 @@ that introduces *system* and *component* abstractions to:
 
 # Basic Usage
 
-To use donut.system, you define a _system_ that contains _component
-definitions_. A component definition can include _references_ to other
-components and _signal handlers_ that specify behavior. 
+To use donut.system, you first define a _system_ that contains _component
+groups_. Component groups contain _component definitions_. Component definitions
+include _signal handlers_ that specify component behaviors.
 
-Here's an example system that defines a `:printer` component and a `:stack`
-component. When the system receives the `:donut.system/start` signal, the `:printer` pops an
-item off the `:stack` and prints it once a second:
+Here's an example of a system definition:
+
+``` clojure
+(ns donut.examples.single-component
+  (:require
+   [donut.system :as ds]))
+
+(def system
+  {::ds/defs
+   {:app {:printer #::ds{:start (fn [_]
+                                  (future
+                                    (loop []
+                                      (println "hello!")
+                                      (Thread/sleep 1000)
+                                      (recur))))
+                         :stop  (fn [{:keys [::ds/instance]}]
+                                  (future-cancel instance))}}}})
+```
+
+> **NOTE**: donut.system makes heavy use of _namespaced keywords_. If the
+> `#::ds{:start ...}` syntax above is new to you, please [read this
+> doc](docs/namespaced-keywords.org).
+
+This example defines a `system` var (the name `system` is arbitrary). Its value
+is a map that has one key, `::ds/defs`. This is where your component definitions
+live. Systems are implemented as maps that contain the `::ds/defs` key.
+
+The value of `::ds/defs` is a map, where the keys are names for component
+groups. In this case, there's only one component group, `:app`. `:app` is an
+arbitrary name with no special significance; you can use whatever keywords you
+want for component group names.
+
+Under the `:app` component group we have a map of where each key is the name of
+the component and each value is the component's definition. A component
+definition specifies the component's behavior, and it can also be used to
+configure a component. In this example, the `:printer` component definition is a
+map that has two keys, `::ds/start` and `::ds/stop`. These keys are names of
+_signal handlers_, which you'll learn about momentarily. `::ds/start` and
+`::ds/stop` are both associated with a function. These functions are where you
+specify a component's behavior.
+
+Let's actually interact with this system and see its behavior: 
+
+``` clojure
+(let [running-system (ds/signal system ::ds/start)]
+  (Thread/sleep 5000)
+  (ds/signal running-system ::ds/stop))
+```
+
+If you run the above in a REPL, it will print `"hello!"` once a second for five
+seconds and then stop. The function `ds/signal` takes a system as its argument
+and "sends" the given signal (`::ds/start`) to the components in the system,
+calling the corresponding signal handler function. This _signal_ and _send_
+terminology is metaphorical; there's no network or sockets or anything like that
+involved.
+
+The return value of a signal handler becomes the component's _instance._ A
+component instance is typically some object that you can use to stop the
+component. `(ds/signal system ::ds/start)` returns an updated system map that
+includes component instances. If you send another signal to the updated system
+map, it can use those instances. In the example above, we call `(ds/signal
+running-system ::ds/stop)` to send the `::ds/stop` signal, and its signal
+handler cancels the future returned by the `::ds/start` signal handler.
+
+In this snippet, we have a map that includes `::ds/start` and
+`::ds/stop`. This map is bound to the name `PeriodicPrinterComponent`.
+
+
+```clojure
+(ns donut.examples.single-component
+  (:require
+   [donut.system :as ds]))
+
+(def system
+  {::ds/defs
+   {:app {:printer #::ds{:start (fn [_]
+                                  (future
+                                    (loop []
+                                      (println "hello!")
+                                      (Thread/sleep 1000)
+                                      (recur))))
+                         :stop  (fn [{:keys [::ds/instance]}]
+                                  (future-cancel instance))}}}})
+
+;; start the system, let it run for 5 seconds, then stop it
+(comment
+  (let [running-system (ds/signal system ::ds/start)]
+    (Thread/sleep 5000)
+    (ds/signal running-system ::ds/stop)))
+```
+
+You start the system by calling `(ds/signal system ::ds/start)`. `ds/signal`
+returns an updated system map, and here we've bound it to `running-system`. We
+stop the system with `(ds/signal running-system :stop)`.
+
+Let's look at a slightly more complicated example. This system has two
+components, a `:printer` component and a `:stack` component. When the system
+receives the `:donut.system/start` signal, the `:printer` pops an item off the
+`:stack` and prints it once a second:
 
 ``` clojure
 (ns donut.examples.printer
@@ -91,24 +211,21 @@ item off the `:stack` and prints it once a second:
     (ds/signal running-system ::ds/stop)))
 ```
 
-> **NOTE**: donut.system makes heavy use of _namespaced keywords_. If the
-> `#::ds{:start ...}` syntax above is new to you, please [read this
-> doc](docs/namespaced-keywords.org).
-
-In this example, you define `system`, a map that contains just one key,
-`::ds/defs`. `::ds/defs` is a map of _component groups_, of which there are two:
-`:services` and `:app`. The `:services` group has one component definition,
-`:stack`, and the `:app` group has one component definition, `:printer`. (`:app`
-and `:services` are arbitrary names with no special meaning; you can name groups
-whatever you want.)
+As before, `system` is a map that contains just one key, `::ds/defs`.
+`::ds/defs` is a map of _component groups_, of which there are two: `:services`
+and `:app`. The `:services` group has one component definition, `:stack`, and
+the `:app` group has one component definition, `:printer`. 
 
 Component definitions can contain `::ds/start` and `::ds/stop` signal handlers,
 as well as a `::ds/config`. The `:printer` component's `:ds/config` contains a
-_ref_ to the `:stack` component.
+_ref_ to the `:stack` component. You'll learn more about refs below; they allow
+one component to refer to and use another component.
 
 You start the system by calling `(ds/signal system ::ds/start)`. This produces an
 updated system map (bound to `running-system`) which you then use when stopping
 the system with `(ds/signal running-system :stop)`.
+
+The rest of this README covers donut.system's pieces in more detail.
 
 ## Components
 
@@ -223,6 +340,18 @@ on a `:stack` instance to function correctly. Therefore, when we send a
 
 Within `:printer`'s `:start` signal handler, `stack` refers to the atom created
 by the `:stack` component.
+
+When you call `(ds/signal system ::ds/start)`, the following happens:
+
+1. The `::ds/start` signal handler for `[:services :stack]` gets called. It
+   returns an atom, which becomes the component instance for `[:services
+   :stack]`.
+2. Internally, that atom is added to the system map under `[::ds/instances
+   :services :stack]`.
+3. The `::ds/start` signal handler for `[:app :printer]` gets called with a
+   single argument, a map. That map includes the key path `[::ds/config
+   :stack]`, and its value is the component instance for `[:services :stack]` --
+   the atom created at step 1.
 
 ### Deep refs
 
