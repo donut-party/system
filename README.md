@@ -708,7 +708,7 @@ Let's look at each, using this test system:
 
 ### Starting and stopping your system
 
-There are three main ways you'll start and stop your system:
+There are three main options you can choose from to start and stop your system:
 
 #### Method 1: use a `let` binding
 
