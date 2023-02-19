@@ -701,14 +701,14 @@
       gen-graphs))
 
 (defn signal
-  [system signal-name & [component-keys]]
+  [system signal-name & [component-ids]]
   (when-let [explanation (m/explain DonutSystem system)]
     (throw (ex-info "Invalid system"
                     {:reason             :system-spec-validation-error
                      :spec-explain-human (me/humanize explanation)
                      :spec-explain       explanation})))
 
-  (let [inited-system (init-system system signal-name component-keys)]
+  (let [inited-system (init-system system signal-name component-ids)]
     (when-let [explanation (m/explain (into [:enum] (sp/select [::signals sp/MAP-KEYS] inited-system))
                                       signal-name)]
       (throw (ex-info (str "Signal " signal-name " is not recognized. Add it to ::ds/signals")
@@ -856,9 +856,10 @@
 
 (defn stop-failed-system
   "Will attempt to stop a system that threw an exception when starting"
-  []
-  (when-let [system (and *e (::system (ex-data *e)))]
-    (stop system)))
+  ([] (stop-failed-system *e))
+  ([e]
+   (when-let [system (and e (::system (ex-data e)))]
+     (stop system))))
 
 ;;---
 ;;; component helpers
@@ -872,7 +873,8 @@
                              {:component-id (::component-id system)})))})
 
 (defn instance
-  "Get a specific component instance"
+  "Get a specific component instance. With no arguments returns set of all
+  component names."
   ([system]
    (into {}
          (for [[k m] (::instances system)]
@@ -919,8 +921,6 @@
             {}
             (component-ids system))))
 
-;; describe-system, dep-graph
-
 (defn registry-instance
   "Returns a component instance for a given key, rather than a given path. Relies
   on ::registry mapping registry keys to component paths.
@@ -938,3 +938,23 @@ Your system should have the key :donut.system/registry, with keywords as keys an
     (throw (ex-info ":donut.system/registry does not contain registry-key
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
                     {:registry-key registry-key}))))
+
+;; useful for tests
+
+(def ^:dynamic *system* nil)
+
+(defmacro with-*system*
+  "Start a system and bind it to *system*. Stop system after body."
+  [system & body]
+  `(binding [*system* (start ~system)]
+     (try ~@body
+          (stop *system*)
+          (catch #?(:clj Throwable
+                    :cljs js/Error) e#
+            (stop-failed-system e#)
+            (throw e#)))))
+
+(defn system-fixture
+  "To be used with `use-fixtures`"
+  [system]
+  (fn [f] (with-*system* system (f))))
