@@ -453,7 +453,6 @@
                                           :status (fn [{:keys [::ds/instance] :as x}]
                                                     (keyword instance))}}}})))))
 
-
 (deftest with-*system*-test
   (ds/with-*system*
     {::ds/defs {:group-a {:a #::ds{:start  "component a"}

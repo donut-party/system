@@ -154,37 +154,6 @@ map, it can use those instances. In the example above, we call `(ds/signal
 running-system ::ds/stop)` to send the `::ds/stop` signal, and its signal
 handler cancels the future returned by the `::ds/start` signal handler.
 
-In this snippet, we have a map that includes `::ds/start` and
-`::ds/stop`. This map is bound to the name `PeriodicPrinterComponent`.
-
-
-```clojure
-(ns donut.examples.single-component
-  (:require
-   [donut.system :as ds]))
-
-(def system
-  {::ds/defs
-   {:app {:printer #::ds{:start (fn [_]
-                                  (future
-                                    (loop []
-                                      (println "hello!")
-                                      (Thread/sleep 1000)
-                                      (recur))))
-                         :stop  (fn [{:keys [::ds/instance]}]
-                                  (future-cancel instance))}}}})
-
-;; start the system, let it run for 5 seconds, then stop it
-(comment
-  (let [running-system (ds/signal system ::ds/start)]
-    (Thread/sleep 5000)
-    (ds/signal running-system ::ds/stop)))
-```
-
-You start the system by calling `(ds/signal system ::ds/start)`. `ds/signal`
-returns an updated system map, and here we've bound it to `running-system`. We
-stop the system with `(ds/signal running-system :stop)`.
-
 Let's look at a slightly more complicated example. This system has two
 components, a `:printer` component and a `:stack` component. When the system
 receives the `:donut.system/start` signal, the `:printer` pops an item off the
