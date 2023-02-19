@@ -231,6 +231,8 @@ The rest of this README covers donut.system's pieces in more detail.
 
 Components have _definitions_ and _instances._
 
+### Component Definitions
+
 A component definition (_component def_ or just _def_ for short) is an entry in
 the `::ds/defs` map of a system map. A component definition can be a map, as
 this system with a single component definition shows:
@@ -272,12 +274,16 @@ This approach to defining components lets us easily modify them. If you want to
 mock out a component, you just have to use `assoc-in` to assign a new
 `::ds/start` signal handler.
 
+### Component Instances
+
 Signal handlers return a _component instance_, which is stored in the system map
 under `::ds/instances`. Try this to see a system's instances:
 
 ``` clojure
 (::ds/instances (ds/signal system :start))
 ```
+
+This is how you can access component instances for tests.
 
 Component instances are added to the signal handler's argument under the
 `::ds/instance` key. When you apply the `::ds/start` signal to a `Stack`
@@ -688,6 +694,126 @@ namespaces. Your system map might then look something like this:
     :http 
     {:server  http/server
      :handler http/handler}}})
+```
+
+## Testing
+
+How do you test an application that uses donut.system? There are three main
+concerns:
+
+- Starting and stopping your system
+- Accessing component instances
+- Mocking components
+
+Let's look at each, using test system:
+
+``` clojure
+(defmethod ds/named-system ::test
+  [_]
+  {::ds/defs
+   {:group-a
+    {:component-a
+     {::ds/start (fn [_] (atom []))}}
+
+    :group-b
+    {:component-b
+     {::ds/start  (fn [opts]
+                    ;; add an element to the `[:group-a :component-a]` atom on
+                    ;; start
+                    (swap! (get-in opts [::ds/config :component-a])
+                           conj
+                           :foo))
+      ::ds/config {:component-a (ds/ref [:group-a :component-a])}}}}})
+```
+
+### Starting and stopping your system
+
+There are three main ways you'll start and stop your system:
+
+#### Method 1: use a `let` binding
+
+``` clojure
+(deftest your-test
+  (let [system (ds/start ::test)]
+    (is (= [:foo]
+           @(get-in system [::ds/instances :group-a :component-a])))
+    (ds/stop system)))
+```
+
+#### Method 2: `with-*system*`
+
+The `donut.system` namespace has a dynamic var, `*system*`, and a macro that
+handles some of the machinery of working with it:
+
+``` clojure
+(deftest using-with-*system*
+  (ds/with-*system* ::test
+    (is (= [:foo]
+           @(get-in ds/*system* [::ds/instances :group-a :component-a])))))
+```
+
+The macro's first argument is either a system map or a system name. The macro
+will start the system and bind the started system map to `ds/*system*`. It will
+also stop the system.
+
+#### Method 3: `system-fixture`
+
+The function `ds/system-fixture` returns a function that can be used as a
+`clojure.test` fixture:
+
+``` clojure
+(use-fixtures :each (ds/system-fixture ::test))
+
+(deftest using-fixture
+  (is (= [:foo]
+         @(get-in ds/*system* [::ds/instances :group-a :component-a]))))
+```
+
+Just be careful not to mix this method with method 2. If you do that you'll end
+up starting two different systems, and that could cause hard-to-debug problems.
+
+### Accessing component instances
+
+Once you have a started system, you can access component instances under the
+system's `::ds/instances` key. You can also use the function `ds/instance`:
+
+``` clojure
+(deftest retrieving-instances
+  (ds/with-*system* ::test
+    ;; one way to retrieve an instance
+    (is (= [:foo]
+           @(get-in ds/*system* [::ds/instances :group-a :component-a])))
+
+    ;; another way to retrieve an instance
+    (is (= [:foo]
+           @(ds/instance ds/*system* [:group-a :component-a])))))
+```
+
+The advantage of using `ds/instance` is that it will throw an exception if
+you're trying to get an instance for an undefined component, which can help you
+catch typos.
+
+### Mocking Components
+
+When you're writing tests, you'll sometimes want to mock out components. For
+example, if you have an Amazon SQS queue, you might want to mock out the client rather
+than trying to connect to an actual SQS queue over the network. When you use the
+`ds/start` or `ds/system` functions, you can provide a map of component
+overrides, as covered above in the [config helpers](#config-helpers) section.
+Here's what that might look like:
+
+``` clojure
+(deftest with-override
+  ;; method 1
+  (let [test-atom (atom [])]
+    (ds/start ::test {[:group-a :component-a] test-atom})
+    (is (= [:foo] @test-atom)))
+
+  ;; method 2 - the first argument to `ds/with-*system*` can be either a system
+  ;; name or a system map. In this example we're getting a system map.
+  (let [test-atom (atom [])]
+    (ds/with-*system* (ds/system ::test {[:group-a :component-a] test-atom})
+      (is (= [:foo] @test-atom)))))
 ```
 
 # Advanced usage

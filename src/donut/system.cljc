@@ -879,8 +879,11 @@
    (into {}
          (for [[k m] (::instances system)]
            [k (set (keys m))])))
-  ([system component-path]
-   (flat-get-in system [::instances  component-path])))
+  ([system [component-group component-name :as component-id]]
+   (or (flat-get-in system [::instances  component-id])
+       (when-not (contains? (get-in system [::defs component-group])
+                            component-name)
+         (throw (ex-info "Component not defined" {:component-id component-id}))))))
 
 (defn component-doc
   [system component-id]
@@ -928,13 +931,13 @@
   For cases where libraries want to use component instances without having to
   rely on hard-coded paths."
   [system registry-key]
-  (if-let [component-path (get-in system [::registry registry-key])]
-    (if-let [component-instance (instance system component-path)]
+  (if-let [component-id (get-in system [::registry registry-key])]
+    (if-let [component-instance (flat-get-in system [::instances  component-id])]
       component-instance
       (throw (ex-info "No component instance found for registry key.
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
-                      {:registry-key   registry-key
-                       :component-path component-path})))
+                      {:registry-key registry-key
+                       :component-id component-id})))
     (throw (ex-info ":donut.system/registry does not contain registry-key
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
                     {:registry-key registry-key}))))
