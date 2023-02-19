@@ -685,7 +685,7 @@ concerns:
 - Accessing component instances
 - Mocking components
 
-Let's look at each, using test system:
+Let's look at each, using this test system:
 
 ``` clojure
 (defmethod ds/named-system ::test
