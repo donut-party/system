@@ -2,7 +2,7 @@
   (:require
    #?(:clj [clojure.test :refer [deftest is testing]]
       :cljs [cljs.test :refer [deftest is testing] :include-macros true])
-   [donut.system :as ds]
+   [donut.system :as ds :include-macros true]
    [loom.alg :as la]
    [loom.graph :as lg]
    [malli.core :as m]))
