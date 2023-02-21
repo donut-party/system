@@ -28,6 +28,29 @@
         k2 (keys (get defs k1))]
     [k1 k2]))
 
+(defn deep-merge
+  "Recursively merges maps together. If all the maps supplied have nested maps
+  under the same keys, these nested maps are merged. Otherwise the value is
+  overwritten, as in `clojure.core/merge`."
+  {:arglists '([& maps])
+   :added    "1.1.0"}
+  ([])
+  ([a] a)
+  ([a b]
+   (when (or a b)
+     (letfn [(merge-entry [m e]
+               (let [k  (key e)
+                     v' (val e)]
+                 (if (contains? m k)
+                   (assoc m k (let [v (get m k)]
+                                (if (and (map? v) (map? v'))
+                                  (deep-merge v v')
+                                  v')))
+                   (assoc m k v'))))]
+       (reduce merge-entry (or a {}) (seq b)))))
+  ([a b & more]
+   (reduce deep-merge (or a {}) (cons b more))))
+
 ;;---
 ;;; specs
 ;;---
@@ -316,13 +339,13 @@
   resolution fns to be defined with ::resolve-refs, a feature used to work with
   subsystems"
   [system component-id]
-  (if-let [resolution-fn (sp/select-one [::defs component-id ::resolve-refs] system)]
+  (if-let [resolution-fn (flat-get-in system [::defs component-id ::resolve-refs])]
     (resolution-fn system component-id)
     (default-resolve-refs system component-id)))
 
 (defn resolved
   [{:keys [::component-id ::resolved-defs]}]
-  (sp/select-one component-id resolved-defs))
+  (get-in resolved-defs component-id))
 
 ;;---
 ;;; generate component signal apply order graphs
@@ -439,7 +462,7 @@
     ([v]
      (->channel system v))
     ([s v]
-     (sp/setval [channel component-id] v s))))
+     (assoc-in s (into channel component-id) v))))
 
 (defn- channel-fns
   [system component-id]
@@ -507,10 +530,10 @@
 
 (defn- apply-stage-fn
   [system stage-fn component-id]
-  (let [resolved-def (sp/select-one [::resolved-defs component-id] system)]
+  (let [resolved-def (flat-get-in system [::resolved-defs component-id])]
     (stage-fn
      ;; construct map to pass to the `stage-fn`
-     (cond-> {::instance (sp/select-one [::instances component-id] system)
+     (cond-> {::instance (flat-get-in system [::instances component-id])
               ::system   system}
        (map? resolved-def) (merge resolved-def)
        true                (merge (channel-fns system component-id))))))
@@ -563,7 +586,7 @@
 (defn- lifecycle-stage-fn
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
-        stage-fn     (or (sp/select-one [::resolved-defs computation-stage-node] system)
+        stage-fn     (or (flat-get-in system [::resolved-defs computation-stage-node])
                          system-identity)]
     (fn [system]
       (let [stage-result (apply-stage-fn system stage-fn component-id)]
@@ -576,7 +599,7 @@
   fn (e.g. ::pre-start)"
   [system computation-stage-node]
   (let [component-id (vec (take 2 computation-stage-node))
-        resolved-def (sp/select-one [::resolved-defs component-id] system)
+        resolved-def (flat-get-in system [::resolved-defs component-id])
         signal-fn    (cond
                        ;; this can happen if you have a ref to a nonexistent
                        ;; component. it allows signal application to progress to
@@ -586,11 +609,10 @@
                        system-identity
 
                        (component? resolved-def)
-                       (or (sp/select-one [::resolved-defs computation-stage-node] system)
+                       (or (flat-get-in system [::resolved-defs computation-stage-node])
                            ;; catchall handler is used by subsystem to forward
                            ;; signals
-                           (when-let [catchall-handler (sp/select-one [::resolved-defs component-id ::mk-signal-handler]
-                                                                      system)]
+                           (when-let [catchall-handler (flat-get-in system [::resolved-defs component-id ::mk-signal-handler])]
                              (catchall-handler (last computation-stage-node)))
                            system-identity)
 
@@ -737,7 +759,7 @@
   available for ref resolution."
   [imports]
   (reduce (fn [refmap ref]
-            (sp/setval [(ref-key ref)] ref refmap))
+            (assoc-in refmap (ref-key ref) ref))
           {}
           imports))
 
@@ -746,9 +768,9 @@
   imported refs will resolve correctly"
   [{:keys [::imports] :as system-component} parent-system]
   (reduce (fn [system {:keys [key]}]
-            (sp/setval [::subsystem ::instances key]
-                       (sp/select-one [::instances key] parent-system)
-                       system))
+            (assoc-in system
+                      (into [::subsystem ::instances] key)
+                      (sp/select-one [::instances key] parent-system)))
           system-component
           imports))
 
@@ -762,10 +784,10 @@
 (defn- forward-channel
   "used to make all channel 'output' available at the top level"
   [parent-system channel component-id]
-  (if-let [chan-val (sp/select-one [::instances component-id channel] parent-system)]
-    (sp/setval [channel component-id]
-               chan-val
-               parent-system)
+  (if-let [chan-val (flat-get-in parent-system [::instances component-id channel])]
+    (assoc-in parent-system
+              (into channel component-id)
+              chan-val)
     parent-system))
 
 (defn- forward-channels
