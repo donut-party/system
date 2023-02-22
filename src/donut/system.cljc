@@ -28,28 +28,12 @@
         k2 (keys (get defs k1))]
     [k1 k2]))
 
-(defn deep-merge
-  "Recursively merges maps together. If all the maps supplied have nested maps
-  under the same keys, these nested maps are merged. Otherwise the value is
-  overwritten, as in `clojure.core/merge`."
-  {:arglists '([& maps])
-   :added    "1.1.0"}
-  ([])
-  ([a] a)
-  ([a b]
-   (when (or a b)
-     (letfn [(merge-entry [m e]
-               (let [k  (key e)
-                     v' (val e)]
-                 (if (contains? m k)
-                   (assoc m k (let [v (get m k)]
-                                (if (and (map? v) (map? v'))
-                                  (deep-merge v v')
-                                  v')))
-                   (assoc m k v'))))]
-       (reduce merge-entry (or a {}) (seq b)))))
-  ([a b & more]
-   (reduce deep-merge (or a {}) (cons b more))))
+(defn update-many
+  "Map of many paths to update, and their update fns"
+  [m update-many-with-map]
+  (reduce-kv (fn [m path f] (update-in m path f))
+             m
+             update-many-with-map))
 
 ;;---
 ;;; specs
@@ -388,7 +372,8 @@
                       (group-ref? x)
                       (let [group-name (first (ref-key x))]
                         {group-name
-                         (->> (sp/select [::defs group-name sp/MAP-KEYS] system)
+                         (->> (get-in system [::defs group-name])
+                              keys
                               (reduce (fn [group-map k]
                                         (assoc group-map k (ref [group-name k])))
                                       {}))})

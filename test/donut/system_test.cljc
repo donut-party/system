@@ -5,7 +5,8 @@
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
    [loom.graph :as lg]
-   [malli.core :as m]))
+   [malli.core :as m]
+   [clojure.string :as str]))
 
 (defn config-port
   [opts]
@@ -460,3 +461,12 @@
     (is (= {:group-a {:a "component a"
                       :b "component b"}}
            (::ds/instances ds/*system*)))))
+
+(deftest update-many-test
+  (is (= {:a {:b "FOO"
+              :c 1}}
+         (ds/update-many
+          {:a {:b "foo"
+               :c 0}}
+          {[:a :b] str/upper-case
+           [:a :c] inc}))))
