@@ -957,8 +957,9 @@ Your system should have the key :donut.system/registry, with keywords as keys an
   "Start a system and bind it to *system*. Stop system after body."
   [system & body]
   `(binding [*system* (start ~system)]
-     (try ~@body
-          (stop *system*)
+     (try (let [result# ~@body]
+            (stop *system*)
+            result#)
           (catch #?(:clj Throwable
                     :cljs js/Error) e#
             (stop-failed-system e#)

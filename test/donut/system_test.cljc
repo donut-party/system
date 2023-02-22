@@ -455,12 +455,13 @@
                                                     (keyword instance))}}}})))))
 
 (deftest with-*system*-test
-  (ds/with-*system*
-    {::ds/defs {:group-a {:a #::ds{:start  "component a"}
-                          :b #::ds{:start  "component b"}}}}
-    (is (= {:group-a {:a "component a"
-                      :b "component b"}}
-           (::ds/instances ds/*system*)))))
+  (is (= {:group-a {:a "component a"
+                    :b "component b"}}
+         (ds/with-*system*
+           {::ds/defs {:group-a {:a #::ds{:start  "component a"}
+                                 :b #::ds{:start  "component b"}}}}
+           (::ds/instances ds/*system*)
+           ))))
 
 (deftest update-many-test
   (is (= {:a {:b "FOO"
