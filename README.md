@@ -4,8 +4,8 @@
 
 As a developer, one of your tasks is decomposing an application into logically
 coherent, reusable, loosely-coupled components that can be understood and tested
-in isolation. Another task is coordinating these components, composing them in a
-way that&rsquo;s coherent, such that the system as a whole remains
+in isolation. Another task is coordinating these components -- composing them in
+a way that&rsquo;s coherent, such that the system as a whole remains
 comprehensible and it&rsquo;s possible to grow, debug, and maintain the
 application with minimal confusion.
 
@@ -26,7 +26,7 @@ Examples of components you might need in your system include:
 - A messaging or queueing system
 - A job scheduler
 
-Something that all these components have in common is that they have stateful
+Something that these components have in common is that they have stateful
 behaviors, claiming resources like threads and reading and writing to other
 resources. They could also have dependencies that determine the order in which
 they're started and stopped: your job scheduler might use your database as its
@@ -98,15 +98,18 @@ Here's an example of a system definition:
    [donut.system :as ds]))
 
 (def system
-  {::ds/defs
-   {:app {:printer #::ds{:start (fn [_]
-                                  (future
-                                    (loop []
-                                      (println "hello!")
-                                      (Thread/sleep 1000)
-                                      (recur))))
-                         :stop  (fn [{:keys [::ds/instance]}]
-                                  (future-cancel instance))}}}})
+  {::ds/defs ;; <-- components defined under this key
+   {:app ;; <-- component group name
+    {:printer ;; <-- component name
+     ;; ::ds/start and ::ds/stop are signal handlers
+     #::ds{:start (fn [_]
+                    (future
+                      (loop []
+                        (println "hello!")
+                        (Thread/sleep 1000)
+                        (recur))))
+           :stop  (fn [{:keys [::ds/instance]}]
+                    (future-cancel instance))}}}})
 ```
 
 > **NOTE**: donut.system makes heavy use of _namespaced keywords_. If the
@@ -124,12 +127,11 @@ want for component group names.
 
 Under the `:app` component group we have a map of where each key is the name of
 the component and each value is the component's definition. A component
-definition specifies the component's behavior, and it can also be used to
-configure a component. In this example, the `:printer` component definition is a
-map that has two keys, `::ds/start` and `::ds/stop`. These keys are names of
-_signal handlers_, which you'll learn about momentarily. `::ds/start` and
-`::ds/stop` are both associated with a function. These functions are where you
-specify a component's behavior.
+definition specifies the component's behavior. In this example, the `:printer`
+component definition is a map that has two keys, `::ds/start` and `::ds/stop`.
+These keys are names of _signal handlers_, which you'll learn about momentarily.
+`::ds/start` and `::ds/stop` are both associated with a function. These
+functions are where you specify a component's behavior.
 
 Let's actually interact with this system and see its behavior: 
 
@@ -556,6 +558,112 @@ Calling `donut.system.repl/start` will start this system.
 2. Call `(clojure.tools.namespace.repl/refresh :after 'donut.system.repl/start)`
 
 This will reload any changed files and then start your system again.
+
+### Reloaded REPL with beholder
+
+You can use the library [beholder](https://github.com/nextjournal/beholder) to
+watch your file system for changes and automatically reload changes and restart
+your system while you're developing it. Here's how I do it:
+
+First, create the file `dev/src/user.clj` and put this in it:
+
+``` clojure
+(ns user)
+
+(defn dev
+  "Load and switch to the 'dev' namespace."
+  []
+  (require 'dev)
+  (in-ns 'dev)
+  :loaded)
+```
+
+Then create `dev/src/dev.clj` and put this in it:
+
+``` clojure
+(ns dev
+  {:clj-kondo/config {:linters {:unused-namespace {:level :off}}}}
+  (:require
+   [clojure.tools.namespace.repl :as nsrepl]
+   [dev.repl :as dev-repl]
+   [donut.system :as ds]
+   [donut.system.repl :as dsr]
+   [donut.system.repl.state :as dsrs]
+   [fluree.http-api.system :as sys])
+  (:refer-clojure :exclude [test]))
+
+(nsrepl/set-refresh-dirs "dev/src" "src" "test")
+
+(defn routes
+  []
+  (get-in dsrs/system [::ds/defs :env :http/routes]))
+
+(def start dsr/start)
+(def stop dsr/stop)
+(def restart dsr/restart)
+
+(defmethod ds/named-system :donut.system/repl
+  [_]
+  (ds/system :dev))
+
+(when-not dsrs/system
+  (dsr/start))
+```
+
+Next create `dev/src/dev/repl.clj` and put this in it:
+
+``` clojure
+(ns dev.repl
+  (:require [clojure.tools.namespace.repl :as repl]
+            [donut.system.repl :as dsr]
+            [nextjournal.beholder :as beholder]))
+
+(repl/disable-reload!)
+
+(defonce persistent-state (atom {}))
+
+(defn- source-file? [path]
+  (re-find #"(\.cljc?|\.edn)$" (str path)))
+
+(defn- restart*
+  [path]
+  (when (source-file? path)
+    (try
+      (dsr/restart)
+      (catch Exception e
+        (println "Exception reloading:")
+        (println e)))))
+
+(defn- restart [ns]
+  (fn [{:keys [path]}]
+    (binding [*ns* ns]
+      (restart* path))))
+
+(def watcher
+  (beholder/watch (restart *ns*) "src" "resources" "dev/src" "test"))
+
+(comment
+  (beholder/stop watcher))
+```
+
+ merge this configuration into your `deps.edn` file:
+
+``` clojure
+{:aliases
+ {:dev
+  {:extra-paths ["dev/src" "test"]
+   :extra-deps  {com.nextjournal/beholder    {:mvn/version "1.0.0"}
+                 org.clojure/tools.namespace {:mvn/version "1.1.0"}}}}}
+```
+
+By "merge" I mean that if you already have a `:dev` alias, add the values to it
+in a way works for your project.
+
+Once you've done this, you can start REPLs with the `:dev` alias, then call the
+`(dev)` function from the `user` namespace, which is the default namespace.
+Calling `dev` will load the `dev` namespace and switch to it, then start your
+system. It will also get beholder to do its thing, watching the filesystem and
+reloading your namespaces and restarting your system.
 
 ## Handling Failures
 

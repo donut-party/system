@@ -3,15 +3,18 @@
    [donut.system :as ds]))
 
 (def system
-  {::ds/defs
-   {:app {:printer #::ds{:start (fn [_]
-                                  (future
-                                    (loop []
-                                      (println "hello!")
-                                      (Thread/sleep 1000)
-                                      (recur))))
-                         :stop  (fn [{:keys [::ds/instance]}]
-                                  (future-cancel instance))}}}})
+  {::ds/defs ;; <-- components defined under this key
+   {:app ;; <-- component group name
+    {:printer ;; <-- component name
+     ;; ::ds/start and ::ds/stop are signal handlers
+     #::ds{:start (fn [_]
+                    (future
+                      (loop []
+                        (println "hello!")
+                        (Thread/sleep 1000)
+                        (recur))))
+           :stop  (fn [{:keys [::ds/instance]}]
+                    (future-cancel instance))}}}})
 
 ;; start the system, let it run for 5 seconds, then stop it
 (comment
