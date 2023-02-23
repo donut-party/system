@@ -659,11 +659,19 @@ Next create `dev/src/dev/repl.clj` and put this in it:
 By "merge" I mean that if you already have a `:dev` alias, add the values to it
 in a way works for your project.
 
-Once you've done this, you can start REPLs with the `:dev` alias, then call the
-`(dev)` function from the `user` namespace, which is the default namespace.
-Calling `dev` will load the `dev` namespace and switch to it, then start your
-system. It will also get beholder to do its thing, watching the filesystem and
-reloading your namespaces and restarting your system.
+Once you've done this, you start a REPL with the `:dev` alias. If you use emacs,
+you can add the following to your .emacs.d to have CIDER always include the dev
+alias for REPLs:
+
+``` clojure
+(setq cider-clojure-cli-aliases ":dev")
+```
+
+After the REPL has started, call the `(dev)` function from the `user` namespace,
+which is the default namespace. Calling `(dev)` will load the `dev` namespace
+and switch to it, then start your system. It will also get beholder to do its
+thing, watching the filesystem and reloading your namespaces and restarting your
+system.
 
 ## Handling Failures
 
