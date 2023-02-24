@@ -3,6 +3,7 @@
   (:require
    [clojure.walk :as walk]
    [com.rpl.specter :as sp]
+   [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
    [loom.graph :as lg]
@@ -702,6 +703,7 @@
   [maybe-system signal-name component-keys]
   (-> maybe-system
       (update ::signals #(merge default-signals %))
+      dsp/apply-plugins
       merge-base
       (set-component-keys signal-name component-keys)
       (assoc ::last-signal signal-name)
