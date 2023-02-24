@@ -8,7 +8,8 @@
 
  :aliases
  {:dev
-  {:extra-deps  {ring/ring {:mvn/version "1.9.4"}}
+  {:extra-deps  {ring/ring     {:mvn/version "1.9.4"}
+                 djblue/portal {:mvn/version "0.35.1"}}
    :extra-paths ["dev" "test"]}
 
   :test
