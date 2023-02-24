@@ -109,6 +109,22 @@
 (def ComponentSelection
   [:or ComponentGroupName ComponentId])
 
+(def Registry
+  [:map-of keyword? ComponentId])
+
+(def PluginSystem
+  [:map
+   [::defs {:optional true} ComponentGroups]
+   [::base {:optional true} [:map]]])
+
+(def Plugin
+  [:map
+   [::dsp/name keyword?]
+   [::dsp/doc string?]
+   [::dsp/system-defaults PluginSystem]
+   [::dsp/system-merge PluginSystem]
+   [::dsp/system-update fn?]])
+
 (def DonutSystem
   [:map
    [::defs ComponentGroups]
@@ -118,7 +134,9 @@
    [::instances {:optional true} ComponentGroups]
    [::out {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
-   [::selected-component-ids {:optional true} [:set ComponentSelection]]])
+   [::selected-component-ids {:optional true} [:set ComponentSelection]]
+   [::registry {:optional true} Registry]
+   [::plugins {:optional true} [:vector Plugin]]])
 
 (def system? (m/validator DonutSystem))
 
