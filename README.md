@@ -912,6 +912,28 @@ Here's what that might look like:
       (is (= [:foo] @test-atom)))))
 ```
 
+### Selecting Components
+
+If you want to test only the specific parts of the bigger system, you might do that with `ds/select-components`:
+
+``` clojure
+(defmethod ds/named-system ::test
+  [_]
+  {::ds/defs {:group-a {:a #::ds{:start  "component a"
+                                 :config {:c (ds/ref [:group-b :c])}}
+                        :b #::ds{:start  "component b"}}
+              :group-b {:c #::ds{:start "component c"}
+                        :d #::ds{:start "component d"}}}})
+
+(def some-test
+  (ds/with-*system* (-> (ds/system ::test)
+                        (ds/select-components #{[:group-a :a]}))
+    (is (= {:group-b {:c "component c"}  ;; only relevant components get instantized
+            :group-a {:a "component a"}} ;; components b and d were skipped
+           (::ds/instances ds/*system*)))))
+```
+
+
 # Advanced usage
 
 The topics covered so far should let you get started defining components and

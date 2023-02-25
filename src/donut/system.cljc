@@ -674,29 +674,41 @@
 (defn- set-component-keys
   "TODO docs"
   [system signal-name component-keys]
-  (assoc system
-         ::selected-component-ids
-         (set
-          (cond
-            ;; if not starting, scope component keys to started instances
-            (not= ::start signal-name)
-            (sp/select [(assoc config-collect-group-path 0 ::instances)
-                        sp/MAP-KEYS]
-                       system)
+  (update system
+          ::selected-component-ids
+          (fn [selected-component-ids]
+            (set
+             (cond
+               ;; if not starting, scope component keys to started instances
+               (not= ::start signal-name)
+               (sp/select [(assoc config-collect-group-path 0 ::instances)
+                           sp/MAP-KEYS]
+                          system)
 
-            (empty? component-keys)
-            (sp/select [config-collect-group-path sp/MAP-KEYS] system)
+               (and (empty? selected-component-ids)
+                    (empty? component-keys))
+               (sp/select [config-collect-group-path sp/MAP-KEYS] system)
 
-            ;; starting and specified component keys; expand groups
-            :else
-            (reduce (fn [cks ck]
-                      (if (vector? ck)
-                        (conj cks ck)
-                        (into cks (->> system
-                                       (sp/select [::defs ck sp/MAP-KEYS])
-                                       (map vector (repeat ck))))))
-                    #{}
-                    component-keys)))))
+               ;; keep selected-component-ids if they were specified earlier
+               (and (not-empty selected-component-ids)
+                    (empty? component-keys))
+               selected-component-ids
+
+               ;; starting and specified component keys; expand groups
+               :else
+               (reduce (fn [cks ck]
+                         (if (vector? ck)
+                           (conj cks ck)
+                           (into cks (->> system
+                                          (sp/select [::defs ck sp/MAP-KEYS])
+                                          (map vector (repeat ck))))))
+                       #{}
+                       component-keys))))))
+
+(defn select-components
+  "allows selecting components before starting a system"
+  [system component-ids]
+  (set-component-keys system ::start component-ids))
 
 (defn init-system
   [maybe-system signal-name component-keys]

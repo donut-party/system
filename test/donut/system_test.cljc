@@ -262,29 +262,56 @@
              (get-in stopped [::ds/out :info :sub-systems :system-2 :app :server]))))))
 
 (deftest select-components-test
-  (testing "if you specify components, the union of their subgraphs is used"
-    (let [system-def {::ds/defs {:env {:http-port #::ds{:start 9090}}
-                                 :app {:http-server #::ds{:start  config-port
-                                                          :stop   "stopped http-server"
-                                                          :config {:port (ds/ref [:env :http-port])}}
-                                       :db          #::ds{:start "db"
-                                                          :stop  "stopped db"}}}}
-          started    (ds/signal system-def ::ds/start #{[:app :http-server]})]
-      (is (= {::ds/instances {:app {:http-server 9090}
-                              :env {:http-port 9090}}}
-             (select-keys started [::ds/instances])))
-
-      (testing "the selected components are retained beyond the start"
-        (is (= {::ds/instances {:app {:http-server "stopped http-server"}
+  (testing "when selected components are specified at start"
+    (testing "if you specify components, the union of their subgraphs is used"
+      (let [system-def {::ds/defs {:env {:http-port #::ds{:start 9090}}
+                                   :app {:http-server #::ds{:start  config-port
+                                                            :stop   "stopped http-server"
+                                                            :config {:port (ds/ref [:env :http-port])}}
+                                         :db          #::ds{:start "db"
+                                                            :stop  "stopped db"}}}}
+            started    (ds/signal system-def ::ds/start #{[:app :http-server]})]
+        (is (= {::ds/instances {:app {:http-server 9090}
                                 :env {:http-port 9090}}}
-               (-> started
-                   (ds/signal ::ds/stop)
-                   (select-keys [::ds/instances])))))
+               (select-keys started [::ds/instances])))
 
-      (testing "groups you can select groups"
-        (is (= {::ds/instances {:env {:http-port 9090}}}
-               (-> (ds/signal system-def ::ds/start #{:env})
-                   (select-keys [::ds/instances]))))))))
+        (testing "the selected components are retained beyond the start"
+          (is (= {::ds/instances {:app {:http-server "stopped http-server"}
+                                  :env {:http-port 9090}}}
+                 (-> started
+                     (ds/signal ::ds/stop)
+                     (select-keys [::ds/instances])))))
+
+        (testing "groups you can select groups"
+          (is (= {::ds/instances {:env {:http-port 9090}}}
+                 (-> (ds/signal system-def ::ds/start #{:env})
+                     (select-keys [::ds/instances]))))))))
+
+  (testing "when selected components are specified before start"
+    (testing "if you specify components, the union of their subgraphs is used"
+      (let [system-def (-> {::ds/defs {:env {:http-port #::ds{:start 9090}}
+                                       :app {:http-server #::ds{:start  config-port
+                                                                :stop   "stopped http-server"
+                                                                :config {:port (ds/ref [:env :http-port])}}
+                                             :db          #::ds{:start "db"
+                                                                :stop  "stopped db"}}}}
+                           (ds/select-components #{[:app :http-server]}))
+            started    (ds/signal system-def ::ds/start)]
+        (is (= {::ds/instances {:app {:http-server 9090}
+                                :env {:http-port 9090}}}
+               (select-keys started [::ds/instances])))
+
+        (testing "the selected components are retained beyond the start"
+          (is (= {::ds/instances {:app {:http-server "stopped http-server"}
+                                  :env {:http-port 9090}}}
+                 (-> started
+                     (ds/signal ::ds/stop)
+                     (select-keys [::ds/instances])))))
+
+        (testing "groups you can select groups"
+          (is (= {::ds/instances {:env {:http-port 9090}}}
+                 (-> (ds/signal system-def ::ds/start #{:env})
+                     (select-keys [::ds/instances])))))))))
 
 (deftest ref-undefined-test
   (is (thrown-with-msg?
@@ -460,8 +487,27 @@
          (ds/with-*system*
            {::ds/defs {:group-a {:a #::ds{:start  "component a"}
                                  :b #::ds{:start  "component b"}}}}
-           (::ds/instances ds/*system*)
-           ))))
+           (::ds/instances ds/*system*))))
+
+  (testing "when passing a system with mocked and selected components"
+    (is (= {:group-a {:a "mocked component a"}}
+           (ds/with-*system*
+             (-> (ds/system {::ds/defs {:group-a {:a #::ds{:start  "component a"}
+                                                  :b #::ds{:start  "component b"}}}}
+
+                            {[:group-a :a] "mocked component a"})
+                 (ds/select-components #{[:group-a :a]}))
+             (::ds/instances ds/*system*)))))
+
+  (testing "only relevant components are instantized"
+    (ds/with-*system* (-> (ds/system {::ds/defs {:group-a {:a #::ds{:start  "component a"
+                                                                    :config {:c (ds/ref [:group-b :c])}}
+                                                           :b #::ds{:start  "component b"}}
+                                                 :group-b {:c #::ds{:start "component c"}
+                                                           :d #::ds{:start "component d"}}}})
+                          (ds/select-components #{[:group-a :a]}))
+      (is (= {:group-b {:c "component c"}, :group-a {:a "component a"}}
+             (::ds/instances ds/*system*))))))
 
 (deftest update-many-test
   (is (= {:a {:b "FOO"
