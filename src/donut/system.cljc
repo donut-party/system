@@ -2,7 +2,6 @@
   (:refer-clojure :exclude [ref])
   (:require
    [clojure.walk :as walk]
-   [com.rpl.specter :as sp]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
@@ -24,10 +23,20 @@
   (assoc-in m (vec (flatten p)) v))
 
 (defn component-ids
-  [{:keys [::defs]}]
-  (for [k1 (keys defs)
-        k2 (keys (get defs k1))]
-    [k1 k2]))
+  [system & [facet-key]]
+  (let [component-facet ((or facet-key ::defs) system)]
+    (for [k1 (keys component-facet)
+          k2 (keys (get component-facet k1))]
+      [k1 k2])))
+
+(defn assoc-many
+  "(assoc-many {} {[:foo :bar] :bux}) => {:foo {:bar :bux}"
+  ([m assocs]
+   (reduce-kv (fn [m path val] (assoc-in m path val))
+              m
+              assocs))
+  ([m prefix assocs]
+   (update-in m prefix assoc-many assocs)))
 
 (defn update-many
   "Map of many paths to update, and their update fns"
@@ -190,10 +199,6 @@
 ;;---
 ;;; util/ helpers / misc
 ;;---
-
-(def config-collect-group-path
-  "specter path that retains a component's group name"
-  [::defs sp/ALL (sp/collect-one sp/FIRST) sp/LAST])
 
 (defn strk
   "Like `str` but with keywords"
@@ -378,48 +383,71 @@
   local refs -- (ref :component-name) -- or group refs
   -- (group-ref :group-name). This function desugars both kinds of refs. "
   [system]
-  ;; walk over all component defs, filtering for refs and systems, to apply
-  ;; transformation
-  (sp/transform [config-collect-group-path (sp/walker (some-fn ref? system?))]
-                (fn [group-name x]
-                  (let [rt (ref-type x)]
-                    (cond
-                      ;; don't descend into subsystems
-                      (system? x)
-                      x
+  (reduce (fn [expanded-system component-id]
+            (let [component-path (into [::defs] component-id)]
+              ;; skip subsystem components
+              (if (::subystem (get-in expanded-system component-path))
+                expanded-system
+                (update-in expanded-system
+                           component-path
+                           (fn [component-def]
+                             (if (seqable? component-def)
+                               (walk/postwalk (fn [x]
+                                                (let [rt (ref-type x)]
+                                                  (cond
+                                                    (group-ref? x)
+                                                    (let [group-name (first (ref-key x))]
+                                                      {group-name
+                                                       (->> (get-in system [::defs group-name])
+                                                            keys
+                                                            (reduce (fn [group-map k]
+                                                                      (assoc group-map k (ref [group-name k])))
+                                                                    {}))})
 
-                      (group-ref? x)
-                      (let [group-name (first (ref-key x))]
-                        {group-name
-                         (->> (get-in system [::defs group-name])
-                              keys
-                              (reduce (fn [group-map k]
-                                        (assoc group-map k (ref [group-name k])))
-                                      {}))})
+                                                    (= ::local-ref rt)
+                                                    (ref (into [(first component-id)] (ref-key x)))
 
-                      (= ::local-ref rt)
-                      (ref (into [group-name] (ref-key x)))
+                                                    (= ::ref rt)
+                                                    x
 
-                      (= ::ref rt)
-                      x)))
-                system))
+                                                    :else
+                                                    x)))
+                                              component-def)
+                               component-def))))))
+          system
+          (component-ids system)))
+
+(defn- component-refs
+  "helper for ref-edges"
+  [component-def]
+  (when (seqable? component-def)
+    (let [refs (atom [])]
+      (walk/postwalk (fn [x]
+                       (when (ref? x)
+                         (swap! refs conj x))
+                       x)
+                     component-def)
+      @refs)))
 
 (defn- ref-edges
   "used to populate the component graph with directed edges"
   [system direction]
-  (->> system
-       expand-refs-for-graph
-       (sp/select [config-collect-group-path
-                   sp/ALL
-                   (sp/collect-one sp/FIRST)
-                   sp/LAST
-                   (sp/walker ref?)])
-       (map (fn [[group-name component-name ref]]
-              (let [parent [group-name component-name]
-                    child  (component-id ref)]
-                (if (= :topsort direction)
-                  [parent child]
-                  [child parent]))))))
+  (let [expanded-system (expand-refs-for-graph system)
+        defs (::defs expanded-system)]
+    (->>
+     ;; collect all component refs for all components
+     (for [k1  (keys defs)
+           k2  (keys (get defs k1))
+           ref (component-refs (get-in expanded-system [::defs k1 k2]))]
+       [k1 k2 ref])
+
+     ;; respect graph edge directionality
+     (map (fn [[group-name component-name ref]]
+            (let [parent [group-name component-name]
+                  child  (component-id ref)]
+              (if (= :topsort direction)
+                [parent child]
+                [child parent])))))))
 
 (defn- component-graph-add-edges
   "uses refs to build a dependency map for components"
@@ -691,7 +719,8 @@
 ;;---
 
 (defn- set-component-keys
-  "TODO docs"
+  "You can scope down what component keys to use. In subsequent interactions with
+  a system, use only those component keys."
   [system signal-name component-keys]
   (assoc system
          ::selected-component-ids
@@ -699,20 +728,18 @@
           (cond
             ;; if not starting, scope component keys to started instances
             (not= ::start signal-name)
-            (sp/select [(assoc config-collect-group-path 0 ::instances)
-                        sp/MAP-KEYS]
-                       system)
+            (component-ids system ::instances)
 
             (empty? component-keys)
-            (sp/select [config-collect-group-path sp/MAP-KEYS] system)
+            (component-ids system)
 
             ;; starting and specified component keys; expand groups
             :else
             (reduce (fn [cks ck]
                       (if (vector? ck)
                         (conj cks ck)
-                        (into cks (->> system
-                                       (sp/select [::defs ck sp/MAP-KEYS])
+                        (into cks (->> (get-in system [::defs ck])
+                                       keys
                                        (map vector (repeat ck))))))
                     #{}
                     component-keys)))))
@@ -736,7 +763,7 @@
                      :spec-explain       explanation})))
 
   (let [inited-system (init-system system signal-name component-ids)]
-    (when-let [explanation (m/explain (into [:enum] (sp/select [::signals sp/MAP-KEYS] inited-system))
+    (when-let [explanation (m/explain (into [:enum] (->> inited-system ::signals keys))
                                       signal-name)]
       (throw (ex-info (str "Signal " signal-name " is not recognized. Add it to ::ds/signals")
                       {:reason             :signal-not-recognized
@@ -775,16 +802,16 @@
   (reduce (fn [system {:keys [key]}]
             (assoc-in system
                       (into [::subsystem ::instances] key)
-                      (sp/select-one [::instances key] parent-system)))
+                      (get-in parent-system (into [::instances] key))))
           system-component
           imports))
 
 (defn- subsystem-resolver
   [parent-system component-id]
-  (->> (default-resolve-refs parent-system component-id)
-       (sp/transform [::resolved-defs component-id]
-                     (fn [system]
-                       (merge-imports system parent-system)))))
+  (-> (default-resolve-refs parent-system component-id)
+      (update-in (into [::resolved-defs] component-id)
+                 (fn [system]
+                   (merge-imports system parent-system)))))
 
 (defn- forward-channel
   "used to make all channel 'output' available at the top level"
@@ -845,15 +872,6 @@
 (defmulti named-system
   "A way to name different system, e.g. :test, :dev, :prod, etc."
   identity)
-
-(defn assoc-many
-  "(assoc-many {} {[:foo :bar] :bux}) => {:foo {:bar :bux}"
-  ([m assocs]
-   (reduce-kv (fn [m path val] (assoc-in m path val))
-              m
-              assocs))
-  ([m prefix assocs]
-   (update-in m prefix assoc-many assocs)))
 
 (defn system
   "specify a system or a system named registered with `config`, and optionally
