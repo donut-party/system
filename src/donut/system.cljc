@@ -718,23 +718,15 @@
 ;;; init system, apply signal
 ;;---
 
-(defn- set-component-keys
+(defn select-components
   "You can scope down what component keys to use. In subsequent interactions with
   a system, use only those component keys."
-  [system signal-name component-keys]
+  [system component-keys]
   (assoc system
          ::selected-component-ids
          (set
-          (cond
-            ;; if not starting, scope component keys to started instances
-            (not= ::start signal-name)
-            (component-ids system ::instances)
-
-            (empty? component-keys)
+          (if (empty? component-keys)
             (component-ids system)
-
-            ;; starting and specified component keys; expand groups
-            :else
             (reduce (fn [cks ck]
                       (if (vector? ck)
                         (conj cks ck)
@@ -745,24 +737,23 @@
                     component-keys)))))
 
 (defn init-system
-  [maybe-system signal-name component-keys]
+  [maybe-system signal-name]
   (-> maybe-system
       (update ::signals #(merge default-signals %))
       dsp/apply-plugins
       merge-base
-      (set-component-keys signal-name component-keys)
       (assoc ::last-signal signal-name)
       gen-graphs))
 
 (defn signal
-  [system signal-name & [component-ids]]
+  [system signal-name]
   (when-let [explanation (m/explain DonutSystem system)]
     (throw (ex-info "Invalid system"
                     {:reason             :system-spec-validation-error
                      :spec-explain-human (me/humanize explanation)
                      :spec-explain       explanation})))
 
-  (let [inited-system (init-system system signal-name component-ids)]
+  (let [inited-system (init-system system signal-name)]
     (when-let [explanation (m/explain (into [:enum] (->> inited-system ::signals keys))
                                       signal-name)]
       (throw (ex-info (str "Signal " signal-name " is not recognized. Add it to ::ds/signals")
@@ -885,15 +876,19 @@
            (fn? component-def-overrides)  (component-def-overrides system)
            (not component-def-overrides)  system
            :else                          (throw (ex-info "component def overrides must be a map or function"
-                                                          {:custom-config component-def-overrides}))))))
+                                                          {:component-def-overrides component-def-overrides})))))
+  ([sconf component-def-overrides selected-components]
+   (-> sconf
+       (system component-def-overrides)
+       (select-components selected-components))))
 
 (defn start
   ([config-name]
    (signal (system config-name) ::start))
-  ([config-name custom-config]
-   (signal (system config-name custom-config) ::start))
-  ([config-name custom-config component-ids]
-   (signal (system config-name custom-config) ::start component-ids)))
+  ([config-name component-def-overrides]
+   (signal (system config-name component-def-overrides) ::start))
+  ([config-name component-def-overrides component-ids]
+   (signal (system config-name component-def-overrides component-ids) ::start)))
 
 (defn stop [system] (signal system ::stop))
 (defn suspend [system] (signal system ::suspend))

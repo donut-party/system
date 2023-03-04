@@ -269,7 +269,8 @@
                                                           :config {:port (ds/ref [:env :http-port])}}
                                        :db          #::ds{:start "db"
                                                           :stop  "stopped db"}}}}
-          started    (ds/signal system-def ::ds/start #{[:app :http-server]})]
+          started    (ds/signal (ds/select-components system-def  #{[:app :http-server]})
+                                ::ds/start)]
       (is (= {::ds/instances {:app {:http-server 9090}
                               :env {:http-port 9090}}}
              (select-keys started [::ds/instances])))
@@ -283,7 +284,8 @@
 
       (testing "groups you can select groups"
         (is (= {::ds/instances {:env {:http-port 9090}}}
-               (-> (ds/signal system-def ::ds/start #{:env})
+               (-> (ds/signal (ds/select-components system-def #{:env})
+                              ::ds/start)
                    (select-keys [::ds/instances]))))))))
 
 (deftest ref-undefined-test
