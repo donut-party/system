@@ -988,7 +988,7 @@ The `system` function takes an optional third argument that lets you specify
 what components you want to use:
 
 ``` clojure
-(ds/system ::named-system {} #{[:group-1 :component-1]})
+(ds/system :named-system {} #{[:group-1 :component-1]})
 (ds/system
   {;; first argument can also be a system map
   }
@@ -1002,7 +1002,14 @@ work with only a subset of all system components.
 
 When you select components, the entire subgraph of component dependencies get
 selected too; you don't have to include all those dependencies in your
-selection.
+selection. For example with this:
+
+``` clojure
+(ds/signal (ds/system :test {} #{[:group-1 :component-1]}) ::ds/start)
+```
+
+The `::ds/start` signal gets sent to the component `[:group-1 :component-1]` as
+well as all the components it depends on.
 
 You can also select component groups by using just the group's name for your
 selection, like so:
