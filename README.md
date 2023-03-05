@@ -984,28 +984,38 @@ first-class support for groups.
 
 ## Selecting components
 
-You can select parts of a system to send a signal to:
+The `system` function takes an optional third argument that lets you specify
+what components you want to use:
 
 ``` clojure
-(let [running-system (ds/signal system ::ds/start #{[:group-1 :component-1]
-                                                    [:group-1 :component-2]})]
-  (ds/signal running-system ::ds/stop))
+(ds/system :named-system {} #{[:group-1 :component-1]})
+(ds/system
+  {;; first argument can also be a system map
+  }
+  {}
+  #{[:group-1 :component-1]})
 ```
 
-First, we call `ds/start` and pass it an optional third argument, a set of
-_selected components_ This will filter out all components that aren't
-descendants of `[:group-1 :component-1]` or `[:group-2 :component-2]` and send
-the `::ds/start` signal only to them.
+The purpose of specifying components like this is to limit what components
+receive signals. This might come in handy in testing, where you might want to
+work with only a subset of all system components.
 
-Your selection is stored in the system state that gets returned, so when you
-call `(ds/stop running-system)` it only sends the `::ds/stop` signal to the
-components that had received the `::ds/start` signal.
+When you select components, the entire subgraph of component dependencies get
+selected too; you don't have to include all those dependencies in your
+selection. For example with this:
+
+``` clojure
+(ds/signal (ds/system :test {} #{[:group-1 :component-1]}) ::ds/start)
+```
+
+The `::ds/start` signal gets sent to the component `[:group-1 :component-1]` as
+well as all the components it depends on.
 
 You can also select component groups by using just the group's name for your
 selection, like so:
 
 ``` clojure
-(ds/signal system ::ds/start #{:group-1})
+(ds/system system {} #{:group-1})
 ```
 
 ## Stages
