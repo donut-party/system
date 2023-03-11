@@ -946,6 +946,13 @@
                   ref)))
          (set))))
 
+(defn dependency-pairs
+  "Pairs of [A B], where A is component that depends on B"
+  [system]
+  (for [component-id (component-ids system)
+        dep          (component-dependencies system component-id)]
+    [component-id dep]))
+
 (defn describe-component
   [system component-id]
   {:name            component-id
