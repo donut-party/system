@@ -15,13 +15,17 @@
   signal-name)
 
 (defn start
-  [& args]
+  [& [maybe-system & args]]
   (try
-    (alter-var-root #'state/system (fn [sys]
-                                     (when (and (ds/system? sys)
-                                                (not= ::ds/stop (::ds/last-signal sys)))
-                                       (ds/stop sys))
-                                     (apply ds/start :donut.system/repl args)))
+    (let [[system args] (if (or (keyword? maybe-system)
+                                (ds/system? maybe-system))
+                          [maybe-system args]
+                          [:donut.system/repl (into [maybe-system] args)])]
+      (alter-var-root #'state/system (fn [sys]
+                                       (when (and (ds/system? sys)
+                                                  (not= ::ds/stop (::ds/last-signal sys)))
+                                         (ds/stop sys))
+                                       (apply ds/start system args))))
     ::ds/start
     (catch ExceptionInfo e
       (ds/stop-failed-system)

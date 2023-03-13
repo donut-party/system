@@ -542,17 +542,53 @@ Component selection is explained below.
 
 ## Reloaded REPL workflow
 
-The `donut.system.repl` has conveniences for REPL workflows. To take advantage
-of it, first create a named-config with the name `:donut.system/repl`:
+The `donut.system.repl` namespace has conveniences for REPL workflows. By
+default, it will start and stop a named-system named `:donut.system/repl`, but
+you can also specify a system:
+
 
 ``` clojure
+(require '[donut.system :as ds])
+(require '[donut.system.repl :as dsr])
+
+;;---
+;; By default, the named-system :donut.system.repl is used
+
 (defmethod ds/named-system :donut.system/repl
   [_]
-  {::ds/defs {}})
+  {::ds/defs {:group {:component {::ds/start (fn [_] (println "starting :donut.system/repl"))
+                                  ::ds/stop (fn [_] (println "stopping :donut.system/repl"))}}}})
+
+(dsr/start)
+;; => starting :donut.system/repl
+
+(dsr/stop)
+;; => stopping :donut.system/repl
+
+;; you can still override components
+(dsr/start {[:group :component ::ds/start] (fn [_] (println "override"))})
+;; => override
+
+;;---
+;; You can also use a different named-system
+
+(defmethod ds/named-system :dev
+  [_]
+  {::ds/defs {:group {:component {::ds/start (fn [_] (println "starting :dev"))
+                                  ::ds/stop (fn [_] (println "stopping :dev"))}}}})
+
+(dsr/start :dev)
+;; => starting :dev
+
+(dsr/stop)
+;; => stopping :dev
+
+;; you can still override components
+(dsr/start :dev {[:group :component ::ds/start] (fn [_] (println "override dev"))})
+;; => override dev
 ```
 
-Calling `donut.system.repl/start` will start this system.
-`donut.system.repl/stop` will stop it. `donut.system.repl/restart` will:
+`donut.system.repl/restart` will:
 
 1. Stop the running system
 2. Call `(clojure.tools.namespace.repl/refresh :after 'donut.system.repl/start)`
