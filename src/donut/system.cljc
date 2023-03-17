@@ -965,7 +965,9 @@
 
 (defn describe-system
   [system]
-  (let [system (signal system ::status)]
+  (let [system (if (::instances system)
+                 (signal system ::status)
+                 system)]
     (reduce (fn [m component-id]
               (assoc-in m component-id (describe-component system component-id)))
             {}

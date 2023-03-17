@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>React</title>
+    <title>System Visualization</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js" integrity="sha512-XHDcSyqhOoO2ocB7sKOCJEkUjw/pQCJViP1ynpy+EGh/LggzrP6U/V3a++LQTnZT7sCQKeHRyWHfhN2afjXjCg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <style type="text/css" media="screen">
@@ -47,7 +47,21 @@
        nodes: nodes,
        edges: edges
      };
-     var options = {};
+     var options = {
+       nodes: {
+         borderWidth: 2,
+         borderWidthSelected: 2,
+         color: {
+           background: "#fff",
+           border: "#aaa",
+           highlight: {
+             background: "#fff",
+             border: "#666"
+           }
+         },
+         shape: "box"
+       }
+     };
      var network = new vis.Network(container, data, options);
     </script>
 
