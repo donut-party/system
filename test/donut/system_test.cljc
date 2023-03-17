@@ -466,15 +466,15 @@
             :config          nil
             :resolved-config nil
             :instance        nil
-            :status          nil
+            :status          :status-a
             :doc             nil
             :dependencies    #{}}
            :b
            {:name            [:group-a :b]
             :config          {:dep (ds/local-ref [:a])}
-            :resolved-config nil
+            :resolved-config {:dep nil}
             :instance        nil
-            :status          nil
+            :status          :status-b
             :doc             nil
             :dependencies    #{[:group-a :a]}}}}
          (ds/describe-system

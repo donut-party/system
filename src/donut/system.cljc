@@ -51,16 +51,16 @@
 
 (def default-signals
   "which graph sort order to follow to apply signal, and where to put result"
-  {::start   {:order      :reverse-topsort
-              :result-key ::instances}
-   ::stop    {:order      :topsort
-              :result-key ::instances}
-   ::suspend {:order      :topsort
-              :result-key ::instances}
-   ::resume  {:order      :reverse-topsort
-              :result-key ::instances}
-   ::status  {:order      :reverse-topsort
-              :result-key ::status}})
+  {::start   {:order       :reverse-topsort
+              :signal-type :lifecycle}
+   ::stop    {:order       :topsort
+              :signal-type :lifecycle}
+   ::suspend {:order       :topsort
+              :signal-type :lifecycle}
+   ::resume  {:order       :reverse-topsort
+              :signal-type :lifecycle}
+   ::status  {:order       :reverse-topsort
+              :signal-type :status}})
 
 (def Component
   (->> default-signals
@@ -256,24 +256,25 @@
 (defn group-ref-exception
   [_system referencing-component-id referenced-component-group-name]
   (ex-info (str "Invalid group ref: '" referencing-component-id "' "
-                "references empty component group '" referenced-component-group-name "'")
+                "references undefined component group '" referenced-component-group-name "'")
            {:referencing-component-id        referencing-component-id
             :referenced-component-group-name referenced-component-group-name}))
 
 (defn- resolve-ref
   [system referencing-component-id ref]
-  (let [[component-group-name component-name :as rkey] (ref-key ref)]
-    (when-not (contains? (::instances system)
-                         component-group-name)
-      (throw (group-ref-exception system
-                                  (component-id ref)
-                                  component-group-name)))
-    (when (and component-name
-               (not (contains? (get-in system [::instances component-group-name])
-                               component-name)))
-      (throw (ref-exception system
-                            referencing-component-id
-                            (component-id ref))))
+  (let [[component-group-name component-name :as rkey] (ref-key ref)
+        lifecycle? (= :lifecycle (get-in system [::signals (::last-signal system) :signal-type]))]
+    (when lifecycle?
+      (when-not (contains? (::instances system) component-group-name)
+        (throw (group-ref-exception system
+                                    (component-id ref)
+                                    component-group-name)))
+      (when (and component-name
+                 (not (contains? (get-in system [::instances component-group-name])
+                                 component-name)))
+        (throw (ref-exception system
+                              referencing-component-id
+                              (component-id ref)))))
     (flat-get-in system [::instances rkey])))
 
 ;; ref resolution zipping
@@ -658,7 +659,9 @@
 
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)
-            result-key   (get-in system [::signals (last computation-stage-node) :result-key])]
+            result-key   (if (= :lifecycle (get-in system [::signals (last computation-stage-node) :signal-type]))
+                           ::instances
+                           (last computation-stage-node))]
         (if (system? stage-result)
           stage-result
           (assoc-in system (into [result-key] component-id) stage-result))))))
@@ -683,13 +686,12 @@
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
-  [system computation-stage t]
+  [_system computation-stage t]
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:component      (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
             :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))
-            ::system        system}
+                               :cljs (. t -message))}
            t))
 
 (defn- apply-signal-stage
@@ -965,9 +967,7 @@
 
 (defn describe-system
   [system]
-  (let [system (if (::instances system)
-                 (signal system ::status)
-                 system)]
+  (let [system (signal system ::status)]
     (reduce (fn [m component-id]
               (assoc-in m component-id (describe-component system component-id)))
             {}
