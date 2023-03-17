@@ -971,6 +971,13 @@
             {}
             (component-ids system))))
 
+(defn describe-components
+  [system]
+  (let [desc (describe-system system)]
+    (for [[_group-name components] desc
+          [_component-name component-desc] components]
+      component-desc)))
+
 (defn registry-instance
   "Returns a component instance for a given key, rather than a given path. Relies
   on ::registry mapping registry keys to component paths.
