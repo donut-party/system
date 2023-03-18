@@ -32,10 +32,12 @@
                        :app {:http-server {:port (ds/ref [:env :http-port])}}}}))))
 
 (deftest resolve-refs-test
-  (is (= #::ds{:defs          {:app {:http-server {:port (ds/ref [:env :http-port])}}}
+  (is (= #::ds{:defs          {:app {:http-server {:port (ds/ref [:env :http-port])}}
+                               :env {:http-port 9090}}
                :resolved-defs {:app {:http-server {:port 9090}}},
                :instances     {:env {:http-port 9090}}}
-         (#'ds/resolve-refs #::ds{:defs      {:app {:http-server {:port (ds/ref [:env :http-port])}}}
+         (#'ds/resolve-refs #::ds{:defs      {:app {:http-server {:port (ds/ref [:env :http-port])}}
+                                              :env {:http-port 9090}}
                                   :instances {:env {:http-port 9090}}}
                             [:app :http-server]))))
 
@@ -442,19 +444,45 @@
             :dependencies    #{}}
            :b
            {:name            [:group-a :b]
-            :config          nil
-            :resolved-config nil
+            :config          {:dep (ds/local-ref [:a])}
+            :resolved-config {:dep ["a-component"]}
             :instance        "b-component"
             :status          :b-component
             :doc             nil
-            :dependencies    #{}}}}
+            :dependencies    #{[:group-a :a]}}}}
          (ds/describe-system
           (ds/start
            {::ds/defs {:group-a {:a #::ds{:start  (with-meta ["a-component"] {:doc "a component doc"})
                                           :status (fn [_] :status-a)}
                                  :b #::ds{:start  (fn [_] "b-component")
-                                          :status (fn [{:keys [::ds/instance] :as x}]
-                                                    (keyword instance))}}}})))))
+                                          :status (fn [{:keys [::ds/instance]}]
+                                                    (keyword instance))
+                                          :config {:dep (ds/local-ref [:a])}}}}})))))
+
+(deftest describe-unstarted-system-test
+  (is (= {:group-a
+          {:a
+           {:name            [:group-a :a]
+            :config          nil
+            :resolved-config nil
+            :instance        nil
+            :status          :status-a
+            :doc             nil
+            :dependencies    #{}}
+           :b
+           {:name            [:group-a :b]
+            :config          {:dep (ds/local-ref [:a])}
+            :resolved-config {:dep nil}
+            :instance        nil
+            :status          :status-b
+            :doc             nil
+            :dependencies    #{[:group-a :a]}}}}
+         (ds/describe-system
+          {::ds/defs {:group-a {:a #::ds{:start  (with-meta ["a-component"] {:doc "a component doc"})
+                                         :status (fn [_] :status-a)}
+                                :b #::ds{:start  (fn [_] "b-component")
+                                         :status :status-b
+                                         :config {:dep (ds/local-ref [:a])}}}}}))))
 
 (deftest with-*system*-test
   (is (= {:group-a {:a "component a"

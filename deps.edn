@@ -1,9 +1,8 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
  :deps  {org.clojure/clojure         {:mvn/version "1.10.3"}
          org.clojure/tools.namespace {:mvn/version "1.3.0"}
          aysylu/loom                 {:mvn/version "1.0.2"}
-         metosin/malli               {:mvn/version "0.7.5"}
-         medley/medley               {:mvn/version "1.3.0"}}
+         metosin/malli               {:mvn/version "0.7.5"}}
 
  :aliases
  {:dev

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>System Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js" integrity="sha512-XHDcSyqhOoO2ocB7sKOCJEkUjw/pQCJViP1ynpy+EGh/LggzrP6U/V3a++LQTnZT7sCQKeHRyWHfhN2afjXjCg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <style type="text/css" media="screen">
+     body, html {
+       height: 100%;
+       width: 100%;
+       margin: 0;
+       padding: 0;
+     }
+    </style>
+
+  </head>
+  <body>
+
+    <div id="mynetwork" style="width:100%; height:100%"></div>
+    <script type="text/javascript">
+
+     // BEGIN data
+
+     // create an array with nodes
+     var nodes = new vis.DataSet([
+       { id: 1, label: "Node 1" },
+       { id: 2, label: "Node 2" },
+       { id: 3, label: "Node 3" },
+       { id: 4, label: "Node 4" },
+       { id: 5, label: "Node 5" }
+     ]);
+
+     // create an array with edges
+     var edges = new vis.DataSet([
+       { from: 1, to: 3 },
+       { from: 1, to: 2 },
+       { from: 2, to: 4 },
+       { from: 2, to: 5 },
+       { from: 3, to: 3 }
+     ]);
+
+     // END data
+
+     // create a network
+     var container = document.getElementById("mynetwork");
+     var data = {
+       nodes: nodes,
+       edges: edges
+     };
+     var options = {
+       nodes: {
+         borderWidth: 2,
+         borderWidthSelected: 2,
+         color: {
+           background: "#fff",
+           border: "#666",
+           highlight: {
+             background: "#fff",
+             border: "#666"
+           }
+         },
+         shape: "box"
+       }
+     };
+     var network = new vis.Network(container, data, options);
+    </script>
+
+  </body>
+</html>
