@@ -1,4 +1,5 @@
 (ns donut.view.visjs
+  "Use vis.js to show display a system's dependency graph"
   (:require
    [clojure.java.io :as io]
    [clojure.java.shell :as sh]
@@ -20,7 +21,7 @@
   (let [component-name (:name component-description)]
     (->> component-description
          :dependencies
-         (map (fn [dep] (format "{from: \"%s\", to: \"%s\"}" component-name dep)))
+         (map (fn [dep] (format "{from: \"%s\", to: \"%s\", arrows: \"to\"}" component-name dep)))
          (str/join ","))))
 
 (defn- format-edges
@@ -73,5 +74,4 @@ var edges = new vis.DataSet([%s]);"
         html      (str/replace template #"(?s)// BEGIN.*END data" data)
         temp-file (java.io.File/createTempFile "donut-system" ".html")]
     (spit temp-file html)
-    (open temp-file)
-    ))
+    (open temp-file)))
