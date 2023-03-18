@@ -1,4 +1,4 @@
-(ns donut.view.visjs
+(ns donut.system.view.visjs
   "Use vis.js to show display a system's dependency graph"
   (:require
    [clojure.java.io :as io]
