@@ -2,13 +2,13 @@
   (:refer-clojure :exclude [ref])
   (:require
    [clojure.walk :as walk]
+   [clojure.zip :as zip]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
-   [malli.error :as me]
-   [clojure.zip :as zip]))
+   [malli.error :as me]))
 
 ;;---
 ;; helpers
@@ -130,9 +130,9 @@
   [:map
    [::dsp/name keyword?]
    [::dsp/doc string?]
-   [::dsp/system-defaults PluginSystem]
-   [::dsp/system-merge PluginSystem]
-   [::dsp/system-update fn?]])
+   [::dsp/system-defaults {:optional true} PluginSystem]
+   [::dsp/system-merge {:optional true} PluginSystem]
+   [::dsp/system-update {:optional true} fn?]])
 
 (def DonutSystem
   [:map
@@ -996,7 +996,8 @@ Your system should have the key :donut.system/registry, with keywords as keys an
                        :component-id component-id})))
     (throw (ex-info ":donut.system/registry does not contain registry-key
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
-                    {:registry-key registry-key}))))
+                    {:registry-key          registry-key
+                     :donut.system/registry (:donut.system/registry system)}))))
 
 ;; useful for tests
 
