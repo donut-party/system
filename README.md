@@ -763,14 +763,14 @@ might look something like this:
                      (rj/run-jetty handler options))
            :stop   (fn [{::ds/keys [instance]}]
                      (.stop instance))
-           :config {:handler (ds/ref :handler)
+           :config {:handler (ds/ref [:http :handler])
                     :options {:port  (ds/ref [:env :http-port])
                               :join? false}}}
 
      :handler
-     {:start (fn [_]
-               ;; handler goes here
-               )}}}})
+     #::ds{:start (fn [_]
+                    ;; handler goes here
+                    )}}}})
 
 (defmethod ds/named-system :base
   [_]
