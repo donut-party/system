@@ -566,8 +566,9 @@
   (let [resolved-def (flat-get-in system [::resolved-defs component-id])]
     (stage-fn
      ;; construct map to pass to the `stage-fn`
-     (cond-> {::instance (flat-get-in system [::instances component-id])
-              ::system   system}
+     (cond-> {::instance     (flat-get-in system [::instances component-id])
+              ::system       system
+              ::component-id component-id}
        (map? resolved-def) (merge resolved-def)
        true                (merge (channel-fns system component-id))))))
 
@@ -1019,3 +1020,35 @@ Your system should have the key :donut.system/registry, with keywords as keys an
   "To be used with `use-fixtures`"
   [system]
   (fn [f] (with-*system* system (f))))
+
+(def component-instance-cache
+  (atom {}))
+
+(defn cache-component
+  "cache component instance so that it's preserved between start/stop. takes as
+  its argument a component def which must at least have a `::start` signal handler
+  that's a function. Useful for e.g. not restarting a threadpool for every test.
+
+  ::stop signal won't fire unless instance is removed from
+  `component-instance-cache`
+
+  instances are cached by [group-name component-name cache-key]"
+  [{:keys [::start ::stop] :as component-def} & [cache-key]]
+  (merge component-def
+         {::start     (fn [{:keys [::component-id ::cache-key] :as signal-args}]
+                        (let [cache-key (cond-> component-id
+                                          cache-key (conj cache-key))]
+                          (swap! component-instance-cache
+                                 update
+                                 cache-key
+                                 (fn [component-instance]
+                                   (or component-instance
+                                       (start signal-args)
+                                       true)))))
+          ::stop      (fn [{:keys [::component-id ::cache-key] :as signal-args}]
+                        (let [cache-key (cond-> component-id
+                                          cache-key (conj cache-key))]
+                          (when (and stop
+                                     (not (get @component-instance-cache cache-key)))
+                            (stop signal-args))))
+          ::cache-key cache-key}))

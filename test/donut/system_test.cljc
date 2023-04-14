@@ -501,3 +501,24 @@
                :c 0}}
           {[:a :b] str/upper-case
            [:a :c] inc}))))
+
+(deftest caching
+  (reset! ds/component-instance-cache {})
+  (let [counter (atom 0)
+        system  {::ds/defs
+                 {:group
+                  {:component (ds/cache-component
+                               {::ds/start (fn [_] (swap! counter inc))
+                                ::ds/stop  (fn [_] (swap! counter + 10))})}}}]
+    (ds/start system)
+    (is (= 1 @counter))
+    (ds/stop system)
+    (is (= 1 @counter))
+
+    (ds/start system)
+    (is (= 1 @counter))
+
+    ;; if you clear the cache then the stop signal will go through
+    (reset! ds/component-instance-cache {})
+    (ds/stop system)
+    (is (= 11 @counter))))
