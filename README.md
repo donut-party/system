@@ -1256,6 +1256,112 @@ example could be rewritten like this:
             :component-c {:start "component-c"}}}})
 ```
 
+## Caching Component Instances
+
+Sometimes you don't want a component to stop and start every time a system
+restarts. For example, if you have a threadpool component, you don't want to
+tear it down and recreate it constantly. A couple scenarios where this isn't
+desirable:
+
+* You've set up a [reloaded REPL workflow](#reloaded-repl-workflow) and don't
+  want to restart your threadpool every time you save a file
+* You're starting and stopping a system for every test, and don't want to
+  restart that threadpool between tests
+  
+To cache a component, pass its def to the `ds/cache-component` function. This
+test demonstrates:
+
+``` clojure
+(deftest caching
+  (reset! ds/component-instance-cache {})
+  (let [counter (atom 0)
+        system  {::ds/defs
+                 {:group
+                  {:component (ds/cache-component
+                               {::ds/start (fn [_] (swap! counter inc))
+                                ::ds/stop  (fn [_] (swap! counter + 10))})}}}]
+    (ds/start system)
+    (is (= 1 @counter))
+    (ds/stop system)
+    (is (= 1 @counter))
+
+    (ds/start system)
+    (is (= 1 @counter))
+
+    ;; if you clear the cache then the stop signal will go through
+    (reset! ds/component-instance-cache {})
+    (ds/stop system)
+    (is (= 11 @counter))))
+```
+
+## Plugins
+
+One of donut.system's overarching goals is to provide a foundation for a richer
+ecosystem of composable libraries so that an application developer can easily
+integrate some vertical slice of functionality with minimal fiddling. The plugin
+system is meant to provide a clear interface for this kind of extension.
+
+### Using a plugin
+
+To use a plugin, add it to a vector under `::ds/plugins` in your system map:
+
+``` clojure
+{::ds/defs {}
+ ::ds/plugins [some-plugin]}
+```
+
+### Inspecting plugins
+
+I want it to be easy to understand what a plugin has done to your system. Right
+now, the function `donut.system.plugin` can take a system as an argument and
+produce descriptions of how each plugin has modified the system.
+
+### Defining a plugin
+
+Plugins modify a system map, adding or modifying values. They're defined as maps
+with the following keys:
+
+**`:donut.system.plugin/name`**
+
+A keyword
+
+**`:donut.system.plugin/doc`**
+
+Not currently used, but this is where a docstring goes
+
+**`:donut.system.plugin/system-defaults`**
+
+This gets merged with a system via `(merge system-defaults system)`, meaning
+that any values in your system map take precedence over those in the plugin.
+
+**`:donut.system.plugin/system-merge`**
+
+This gets merge with a system via `(merge system system-merge)`, meaning that
+plugin values will take precedence over those already in the system.
+
+**`:donut.system.plugin/system-update`**
+
+This is a function that takes a system as an argument and returns a new system.
+For cases where you need some extra logic in updating a system definition.
+
+
+Example plugin definition:
+
+``` clojure
+(def test-harness-plugin
+  {:donut.system.plugin/name
+   ::test-harness-plugin
+
+   :donut.system.plugin/doc
+   "Configures system so that donut.endpoint.test.harness can find the
+   components needed to construct and dispatch requests."
+
+   :donut.system.plugin/system-defaults
+   {::ds/registry {:donut/endpoint-router [:routing :router]
+                   :donut/http-handler    [:http :handler]}
+    ::ds/defs     {::config {:default-request-content-type :transit-json}}}})
+```
+
 ## Subsystems
 
 Woe be unto you if you ever have to compose a system from subsystems. But if you
