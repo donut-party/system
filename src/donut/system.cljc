@@ -129,7 +129,7 @@
 (def Plugin
   [:map
    [::dsp/name keyword?]
-   [::dsp/doc string?]
+   [::doc {:optional true} string?]
    [::dsp/system-defaults {:optional true} PluginSystem]
    [::dsp/system-merge {:optional true} PluginSystem]
    [::dsp/system-update {:optional true} fn?]])
