@@ -10,6 +10,8 @@
    [malli.core :as m]
    [malli.error :as me]))
 
+(declare with-*system*)
+
 ;;---
 ;; helpers
 ;;---
