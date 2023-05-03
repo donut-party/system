@@ -3,4 +3,10 @@
 
 (repl/disable-reload!)
 
-(def system nil)
+(def system
+  "keep a reference to a running system"
+  nil)
+
+(def system-args
+  "used to restart a system"
+  nil)

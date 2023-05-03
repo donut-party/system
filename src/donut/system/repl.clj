@@ -15,12 +15,13 @@
   signal-name)
 
 (defn start
-  [& [maybe-system & args]]
+  [& [maybe-system & args :as all-args]]
   (try
     (let [[system args] (if (or (keyword? maybe-system)
                                 (ds/system? maybe-system))
                           [maybe-system args]
                           [:donut.system/repl (into [maybe-system] args)])]
+      (alter-var-root #'state/system-args (constantly all-args))
       (alter-var-root #'state/system (fn [sys]
                                        (when (and (ds/system? sys)
                                                   (not= ::ds/stop (::ds/last-signal sys)))
@@ -35,10 +36,14 @@
   []
   (signal ::ds/stop))
 
+(defn finish-restart
+  []
+  (apply start state/system-args))
+
 (defn restart
   []
   (stop)
-  (repl/refresh :after 'donut.system.repl/start))
+  (repl/refresh :after 'donut.system.repl/finish-restart))
 
 (defn clear!
   []

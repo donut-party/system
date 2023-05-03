@@ -1026,6 +1026,10 @@ Your system should have the key :donut.system/registry, with keywords as keys an
 (def component-instance-cache
   (atom {}))
 
+(defn reset-component-instance-cache!
+  []
+  (reset! component-instance-cache {}))
+
 (defn cache-component
   "cache component instance so that it's preserved between start/stop. takes as
   its argument a component def which must at least have a `::start` signal handler
