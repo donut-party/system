@@ -522,3 +522,22 @@
     (reset! ds/component-instance-cache {})
     (ds/stop system)
     (is (= 11 @counter))))
+
+(deftest custom-signal-test
+  (is (= {:group-a
+          {:a
+           {:name            [:group-a :a]
+            :config          nil
+            :resolved-config nil
+            :instance        {:custom/signal true :started true}
+            :dependencies    #{}
+            :status          nil
+            :doc             nil}}}
+         (-> {::ds/defs {:group-a {:a #::ds{:start         (fn [_] {:started true})
+                                            :custom/signal (fn [{::ds/keys [instance]}] (assoc instance :custom/signal true))}}}
+              ::ds/signals
+              {:custom/signal {:order             :topsort
+                               :returns-instance? true}}}
+             ds/start
+             (ds/signal :custom/signal)
+             ds/describe-system))))

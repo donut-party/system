@@ -447,23 +447,32 @@ need to add a little configuration to your system:
 ```
 
 `::ds/signals` is a map where keys are signal names and values are configuration
-maps. There's only one configuration key, `:order`, and the value can be
-`:topsort` or `:reverse-topsort`. This specifies the order that components'
-signal handlers should be called. `:topsort` means that if Component A refers to
-Component B, then Component A's handler will be called first; reverse is, well,
-the reverse.
+maps. The configuration keys are:
+
+**`:order`** values can be `:topsort` or `:reverse-topsort`. This specifies the
+order that components' signal handlers should be called. `:topsort` means that
+if Component A refers to Component B, then Component A's handler will be called
+first; reverse is, well, the reverse.
+
+**`:returns-instance?`** this determines whether the return value of the signal
+handler should be used to update the system's instances, under `::ds/instances`.
 
 The map you specify under `::ds/signals` will get merged with the default signal
 map, which is:
 
 ``` clojure
 (def default-signals
-  "which graph to follow to apply signal"
-  {::start   {:order :reverse-topsort}
-   ::stop    {:order :topsort}
-   ::suspend {:order :topsort}
-   ::resume  {:order :reverse-topsort}})
-```
+  "which graph sort order to follow to apply signal, and where to put result"
+  {::start   {:order             :reverse-topsort
+              :returns-instance? true}
+   ::stop    {:order             :topsort
+              :returns-instance? true}
+   ::suspend {:order             :topsort
+              :returns-instance? true}
+   ::resume  {:order             :reverse-topsort
+              :returns-instance? true}
+   ::status  {:order :reverse-topsort}})
+   ```
 
 ## Systems
 
@@ -1194,10 +1203,11 @@ It's not obvious what's going on here, so let's step through it.
    No. The rules for handling return values are:
    
    1. If a system map is returned, convey that forward
-   2. Otherwise, if this is a _lifecycle function_ (`::ds/pre-start` or
-      `::ds/post-start`) ignore the return value
-   3. Otherwise, this is a signal handler (`:ds/start`). Place its return value
-      under `::ds/instances`.
+   2. Otherwise, check whether the signal handler is flagged as returning an
+      instance. This is configured under `[::ds/signals :signal-name
+      :returns-instance?]`. If that value is true, use the return value to
+      update the instance value.
+   3. Otherwise, ignore the return value.
 3. `(->validation "component b is invalid")` is similar to `->info` in that it
    places a value in the system map. However, it differs in that it also has
    implicit control flow semantics: if at any point a value is placed under

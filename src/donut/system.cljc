@@ -53,16 +53,15 @@
 
 (def default-signals
   "which graph sort order to follow to apply signal, and where to put result"
-  {::start   {:order       :reverse-topsort
-              :signal-type :lifecycle}
-   ::stop    {:order       :topsort
-              :signal-type :lifecycle}
-   ::suspend {:order       :topsort
-              :signal-type :lifecycle}
-   ::resume  {:order       :reverse-topsort
-              :signal-type :lifecycle}
-   ::status  {:order       :reverse-topsort
-              :signal-type :status}})
+  {::start   {:order             :reverse-topsort
+              :returns-instance? true}
+   ::stop    {:order             :topsort
+              :returns-instance? true}
+   ::suspend {:order             :topsort
+              :returns-instance? true}
+   ::resume  {:order             :reverse-topsort
+              :returns-instance? true}
+   ::status  {:order :reverse-topsort}})
 
 (def Component
   (->> default-signals
@@ -265,8 +264,8 @@
 (defn- resolve-ref
   [system referencing-component-id ref]
   (let [[component-group-name component-name :as rkey] (ref-key ref)
-        lifecycle? (= :lifecycle (get-in system [::signals (::last-signal system) :signal-type]))]
-    (when lifecycle?
+        returns-instance? (get-in system [::signals (::last-signal system) :returns-instance?])]
+    (when returns-instance?
       (when-not (contains? (::instances system) component-group-name)
         (throw (group-ref-exception system
                                     (component-id ref)
@@ -280,6 +279,12 @@
     (flat-get-in system [::instances rkey])))
 
 ;; ref resolution zipping
+;;
+;; this is all a bit opaque but the overall idea is that we want to visit every
+;; node in the system defs and replace all refs with the instances they refer
+;; too, EXCEPT in sub systems.
+;;
+;; We use zippers to visit every node and perform the replacement.
 
 (defn- skip-system-next
   [loc]
@@ -662,7 +667,7 @@
 
     (fn [system]
       (let [stage-result (apply-stage-fn system signal-fn component-id)
-            result-key   (if (= :lifecycle (get-in system [::signals (last computation-stage-node) :signal-type]))
+            result-key   (if (get-in system [::signals (last computation-stage-node) :returns-instance?])
                            ::instances
                            (last computation-stage-node))]
         (if (system? stage-result)
