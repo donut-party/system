@@ -16,6 +16,7 @@
                  :mock-calls (ds/registry-ref ::mock-calls)}})
 
 (defn called?
+  "check that a component fn was called at all"
   ([component-id]
    (called? ds/*system* component-id))
   ([system component-id]
@@ -24,6 +25,7 @@
            @(ds/registry-instance system ::mock-calls))))
 
 (defn called-with?
+  "check that a component fn was called with args"
   ([component-id args]
    (called-with? ds/*system* component-id args))
   ([system component-id args]
