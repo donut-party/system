@@ -412,6 +412,16 @@
            ds/start
            (ds/registry-instance :a-key)))))
 
+(deftest registry-refs-test
+  (let [system (-> {::ds/registry {:the-boop [:app :boop]}
+                    ::ds/defs     {:app {:boop      #::ds{:start "boop"}
+                                         :uses-boop #::ds{:start  (fn [{:keys [::ds/config]}]
+                                                                    [:uses-boop (:boop-dep config)])
+                                                          :config {:boop-dep (ds/registry-ref :the-boop)}}}}}
+                   (ds/start))]
+    (is (= [:uses-boop "boop"]
+           (ds/instance system [:app :uses-boop])))))
+
 (deftest component-ids-test
   (is (= [[:group-a :a]
           [:group-a :b]
