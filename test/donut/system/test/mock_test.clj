@@ -6,7 +6,7 @@
 
 (def test-system
   #::ds{:defs
-        {:group-a {:component-a dstm/mock-fn-component
+        {:group-a {:component-a dstm/MockFnComponent
                    :component-b #::ds{:start  (fn [{:keys [::ds/config]}]
                                                 (let [{:keys [component-a]} config]
                                                   (component-a 1 2 3)))
@@ -25,6 +25,15 @@
     (ds/with-*system* test-system
       (is (dstm/called? [:group-a :component-a]))
       (is (dstm/called-with? [:group-a :component-a] [1 2 3])))))
+
+(deftest test-caled-multiple-times?
+  (let [system (ds/start test-system {[:group-a :component-c] #::ds{:start  (fn [{:keys [::ds/config]}]
+                                                                              (let [{:keys [component-a]} config]
+                                                                                (component-a :component-c)))
+                                                                    :config {:component-a (ds/local-ref [:component-a])}}})]
+    (is (= [[[:group-a :component-a] [1 2 3]]
+            [[:group-a :component-a] [:component-c]]]
+           @(ds/registry-instance system ::dstm/mock-calls)))))
 
 (deftest test-new-atom-per-system-start
   (testing "does not reuse atom between system starts"

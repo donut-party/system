@@ -3,7 +3,17 @@
   (:require
    [donut.system :as ds]))
 
-(def mock-fn-component
+(def MockFnComponent
+  "For mocking components whose instances are a function. Records all calls to the
+  function as a tuple of
+
+  [[:component-group-name :component-name] [arg-1 arg-2 ...]]
+
+  Set value the mock function should return under [::ds/config :return].
+  - If this is a function, then the function will be called
+  - If you need to return a literal function, use (constantly (fn []))
+  - Use something like (cycle [1 2 3]) to return different values on consecutive c
+    alls"
   #::ds{:start  (fn [{:keys [::ds/component-id ::ds/config]}]
                   (let [{:keys [return mock-calls]} config]
                     (reset! mock-calls [])
@@ -34,9 +44,11 @@
         first)))
 
 (def MockCallsComponent
+  "Records all mock calls"
   #::ds{:start (fn [_] (atom []))})
 
 (def mock-calls-plugin
+  "Add MockCallsComponent to a system"
   {:donut.system.plugin/name
    ::mock-calls-plugin
 
