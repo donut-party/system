@@ -39,7 +39,16 @@
          (#'ds/resolve-refs #::ds{:defs      {:app {:http-server {:port (ds/ref [:env :http-port])}}
                                               :env {:http-port 9090}}
                                   :instances {:env {:http-port 9090}}}
-                            [:app :http-server]))))
+                            [:app :http-server])))
+  (is (= #::ds{:defs          {:app {:http-server {:args (seq [(ds/ref [:env :http-port]) (ds/ref [:env :http-host])])}}
+                               :env {:http-host "localhost" :http-port 9090}}
+               :resolved-defs {:app {:http-server {:args [9090 "localhost"]}}},
+               :instances     {:env {:http-host "localhost" :http-port 9090}}}
+         (#'ds/resolve-refs #::ds{:defs      {:app {:http-server {:args (seq [(ds/ref [:env :http-port]) (ds/ref [:env :http-host])])}}
+                                              :env {:http-host "localhost" :http-port 9090}}
+                                  :instances {:env {:http-host "localhost" :http-port 9090}}}
+                            [:app :http-server]))
+      "Refs in seqs are resolved in the correct order"))
 
 (deftest ref-edges-test
   (is (= [[[:env :http-port] [:env :bar]]
@@ -551,3 +560,15 @@
              ds/start
              (ds/signal :custom/signal)
              ds/describe-system))))
+
+(deftest seq-ref-order-test
+  (is (= {:resolved [{:A 1} {:inner 2} 3]}
+         (-> {::ds/defs {:group-a {:a #::ds{:start         {:A 1}}
+                                   :b #::ds{:start         {:B {:inner 2}}}
+                                   :c #::ds{:start         {:C {:inner 3}}}
+                                   :e #::ds{:config        {:args (seq [(ds/local-ref [:a]) (ds/local-ref [:b :B]) (ds/ref [:group-a :c :C :inner])])}
+                                            :start         (fn [{{:keys [args]} ::ds/config}] {:resolved (vec args)})}}}}
+             ds/start
+             ds/describe-system
+             :group-a :e :instance))
+      "Refs are resolved in the correct order inside of seqs"))
