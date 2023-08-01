@@ -319,9 +319,11 @@
    (fn [x] (or (map? x) (sequential? x)))
    seq
    (fn [p xs]
-     (if (and p (map-entry? p))
-       (into [] xs)
-       (into (empty p) xs)))
+     (cond
+       (nil? p) nil
+       (map-entry? p) (into [] xs)
+       (seq? p) (seq xs)
+       :else (into (empty p) xs)))
    m))
 
 (defn registry-ref->ref
