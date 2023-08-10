@@ -179,9 +179,16 @@
 (def ref? (m/validator DonutRef))
 (def ref-type (fn [v] (when (seqable? v) (first v))))
 
-(defn ref [k] [::ref k])
-(defn local-ref [k] [::local-ref k])
-(defn registry-ref [k] [::registry-ref k])
+(defn- ensure-valid-ref [ref]
+  (when-let [explanation (m/explain DonutRef ref)]
+    (throw (ex-info (str "Invalid ref: " (pr-str ref))
+                    {:spec-explain-human (me/humanize explanation)
+                     :spec-explain       explanation})))
+  ref)
+
+(defn ref [k] (ensure-valid-ref [::ref k]))
+(defn local-ref [k] (ensure-valid-ref [::local-ref k]))
+(defn registry-ref [k] (ensure-valid-ref [::registry-ref k]))
 (def ref-key second)
 
 (defn group-ref?
