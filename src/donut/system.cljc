@@ -328,8 +328,8 @@
 
 (defn registry-ref->ref
   [system registry-key]
-  (if-let [component-id (get-in system [::registry registry-key])]
-    (ref component-id)
+  (if-let [component-id (get-in system [::registry (first registry-key)])]
+    (ref (into component-id (rest registry-key)))
     (throw (ex-info ":donut.system/registry does not contain registry-key
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
                     {:registry-key          registry-key

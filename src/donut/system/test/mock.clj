@@ -23,7 +23,7 @@
                         (return)
                         return))))
         :config {:return     nil
-                 :mock-calls (ds/registry-ref ::mock-calls)}})
+                 :mock-calls (ds/registry-ref [::mock-calls])}})
 
 (defn called?
   "check that a component fn was called at all"
