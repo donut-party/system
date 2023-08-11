@@ -119,8 +119,11 @@
 (def ComponentSelection
   [:or ComponentGroupName ComponentId])
 
+(def RegistryKey
+  keyword?)
+
 (def Registry
-  [:map-of keyword? ComponentId])
+  [:map-of RegistryKey ComponentId])
 
 (def PluginSystem
   [:map
@@ -151,27 +154,45 @@
 (def system? (m/validator DonutSystem))
 
 
-(def RefKey
+(def DeepRefPathKey
+  [:or keyword? string? symbol?])
+
+(def LocalRefKey
   [:and
    [:vector :any]
-   [:cat
-    keyword?
-    [:* [:or keyword? string? symbol?]]]])
+   [:catn
+    [:component-name ComponentName]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
 
 (def LocalRef
   [:catn
    [:ref-type [:enum ::local-ref]]
-   [:ref-key RefKey]])
+   [:ref-key LocalRefKey]])
+
+(def RefKey
+  [:and
+   [:vector :any]
+   [:catn
+    [:component-group-name ComponentGroupName]
+    [:component-name [:? ComponentName]]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
 
 (def Ref
   [:catn
    [:ref-type [:enum ::ref]]
    [:ref-key RefKey]])
 
+(def RegistryRefKey
+  [:and
+   [:vector :any]
+   [:catn
+    [:registry-key RegistryKey]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
+
 (def RegistryRef
   [:catn
    [:ref-type [:enum ::registry-ref]]
-   [:ref-key RefKey]])
+   [:ref-key RegistryRefKey]])
 
 (def DonutRef
   [:or Ref LocalRef RegistryRef])
