@@ -152,7 +152,11 @@
 
 
 (def RefKey
-  [:vector {:min 1} keyword?])
+  [:and
+   [:vector :any]
+   [:cat
+    keyword?
+    [:* [:or keyword? string? symbol?]]]])
 
 (def LocalRef
   [:catn

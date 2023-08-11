@@ -104,6 +104,16 @@
                                                      :config {:port (ds/ref [:env :http :port])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances])))))
+  (testing "Refs can contain symbols and strings"
+    (is (= #::ds{:instances {:env {:http {"host" "localhost" 'port 9090}}
+                             :app {:http-server {:host "localhost" :port 9090}}}}
+           (-> #::ds{:defs {:env {:http {"host" "localhost" 'port 9090}}
+                            :app {:http-server #::ds{:start #(::ds/config %)
+                                                       ;; [:env :http 'port] reaches into the :http "component"
+                                                     :config {:host (ds/ref [:env :http "host"])
+                                                              :port (ds/ref [:env :http 'port])}}}}}
+               (ds/signal ::ds/start)
+               (select-keys [::ds/instances])))))
   (testing "components with deep refs are started in the correct order"
     (let [vref-comp (fn [comp-name]
                       #::ds{:config {:ref (ds/ref [:group comp-name :v])}
