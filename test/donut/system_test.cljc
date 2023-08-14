@@ -104,6 +104,16 @@
                                                      :config {:port (ds/ref [:env :http :port])}}}}}
                (ds/signal ::ds/start)
                (select-keys [::ds/instances])))))
+  (testing "Refs can contain symbols and strings"
+    (is (= #::ds{:instances {:env {:http {"host" "localhost" 'port 9090}}
+                             :app {:http-server {:host "localhost" :port 9090}}}}
+           (-> #::ds{:defs {:env {:http {"host" "localhost" 'port 9090}}
+                            :app {:http-server #::ds{:start #(::ds/config %)
+                                                       ;; [:env :http 'port] reaches into the :http "component"
+                                                     :config {:host (ds/ref [:env :http "host"])
+                                                              :port (ds/ref [:env :http 'port])}}}}}
+               (ds/signal ::ds/start)
+               (select-keys [::ds/instances])))))
   (testing "components with deep refs are started in the correct order"
     (let [vref-comp (fn [comp-name]
                       #::ds{:config {:ref (ds/ref [:group comp-name :v])}
@@ -422,14 +432,21 @@
            (ds/registry-instance :a-key)))))
 
 (deftest registry-refs-test
-  (let [system (-> {::ds/registry {:the-boop [:app :boop]}
-                    ::ds/defs     {:app {:boop      #::ds{:start "boop"}
+  (let [system (-> {::ds/registry {:the-beep [:app :beep]
+                                   :the-boop [:app :boop]}
+                    ::ds/defs     {:app {:beep      #::ds{:start {:a 1 :b 2}}
+                                         :boop      #::ds{:start "boop"}
+                                         :deep1     #::ds{:start #(::ds/config %)
+                                                          :config {:beep-dep-a (ds/registry-ref [:the-beep :a])}}
                                          :uses-boop #::ds{:start  (fn [{:keys [::ds/config]}]
                                                                     [:uses-boop (:boop-dep config)])
-                                                          :config {:boop-dep (ds/registry-ref :the-boop)}}}}}
+                                                          :config {:boop-dep (ds/registry-ref [:the-boop])}}}}}
                    (ds/start))]
     (is (= [:uses-boop "boop"]
-           (ds/instance system [:app :uses-boop])))))
+           (ds/instance system [:app :uses-boop])))
+    (is (= {:beep-dep-a 1}
+           (ds/instance system [:app :deep1]))
+        "deep refs work in registry refs")))
 
 (deftest component-ids-test
   (is (= [[:group-a :a]

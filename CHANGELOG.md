@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Unreleased
+
+### Added
+
+### Changed
+
+- Allow strings and symbols in deep ref paths.
+
+
 ## 2022-06-25 0.0.165
 
 ### Added

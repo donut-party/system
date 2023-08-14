@@ -119,8 +119,11 @@
 (def ComponentSelection
   [:or ComponentGroupName ComponentId])
 
+(def RegistryKey
+  keyword?)
+
 (def Registry
-  [:map-of keyword? ComponentId])
+  [:map-of RegistryKey ComponentId])
 
 (def PluginSystem
   [:map
@@ -151,23 +154,45 @@
 (def system? (m/validator DonutSystem))
 
 
-(def RefKey
-  [:vector {:min 1} keyword?])
+(def DeepRefPathKey
+  [:or keyword? string? symbol?])
+
+(def LocalRefKey
+  [:and
+   [:vector :any]
+   [:catn
+    [:component-name ComponentName]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
 
 (def LocalRef
   [:catn
    [:ref-type [:enum ::local-ref]]
-   [:ref-key RefKey]])
+   [:ref-key LocalRefKey]])
+
+(def RefKey
+  [:and
+   [:vector :any]
+   [:catn
+    [:component-group-name ComponentGroupName]
+    [:component-name [:? ComponentName]]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
 
 (def Ref
   [:catn
    [:ref-type [:enum ::ref]]
    [:ref-key RefKey]])
 
+(def RegistryRefKey
+  [:and
+   [:vector :any]
+   [:catn
+    [:registry-key RegistryKey]
+    [:deep-ref-path [:* DeepRefPathKey]]]])
+
 (def RegistryRef
   [:catn
    [:ref-type [:enum ::registry-ref]]
-   [:ref-key RefKey]])
+   [:ref-key RegistryRefKey]])
 
 (def DonutRef
   [:or Ref LocalRef RegistryRef])
@@ -179,9 +204,16 @@
 (def ref? (m/validator DonutRef))
 (def ref-type (fn [v] (when (seqable? v) (first v))))
 
-(defn ref [k] [::ref k])
-(defn local-ref [k] [::local-ref k])
-(defn registry-ref [k] [::registry-ref k])
+(defn- ensure-valid-ref [ref]
+  (when-let [explanation (m/explain DonutRef ref)]
+    (throw (ex-info (str "Invalid ref: " (pr-str ref))
+                    {:spec-explain-human (me/humanize explanation)
+                     :spec-explain       explanation})))
+  ref)
+
+(defn ref [k] (ensure-valid-ref [::ref k]))
+(defn local-ref [k] (ensure-valid-ref [::local-ref k]))
+(defn registry-ref [k] (ensure-valid-ref [::registry-ref k]))
 (def ref-key second)
 
 (defn group-ref?
@@ -328,8 +360,8 @@
 
 (defn registry-ref->ref
   [system registry-key]
-  (if-let [component-id (get-in system [::registry registry-key])]
-    (ref component-id)
+  (if-let [component-id (get-in system [::registry (first registry-key)])]
+    (ref (into component-id (rest registry-key)))
     (throw (ex-info ":donut.system/registry does not contain registry-key
 Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
                     {:registry-key          registry-key
