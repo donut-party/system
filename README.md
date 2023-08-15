@@ -472,7 +472,7 @@ map, which is:
    ::resume  {:order             :reverse-topsort
               :returns-instance? true}
    ::status  {:order :reverse-topsort}})
-   ```
+```
 
 ## Systems
 
