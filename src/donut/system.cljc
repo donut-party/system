@@ -640,7 +640,7 @@ Your system should have the key :donut.system/registry, with keywords as keys an
   [system]
   (-> system
       ::out
-      (select-keys [:errors :validation])
+      (select-keys [:error :validation])
       empty?))
 
 ;; copied from loom.graph to work around its bizarre cljs (:in g) issue
