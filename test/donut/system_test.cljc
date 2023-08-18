@@ -178,6 +178,30 @@
                (ds/signal ::ds/start)
                (select-keys [::ds/out]))))))
 
+(deftest signal-error-short-circuit
+  (is (= #::ds{:out {:error {:env {:http-port {:message "Intentional error"}}}}}
+         (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
+                   :defs {:env {:http-port #::ds{:start    (fn [{:keys [->error]}]
+                                                             (->error {:message "Intentional error"}))}}
+                          :app {:http-server #::ds{:start  config-port
+                                                   ;; This ref will always fail to resolve
+                                                   :config {:port (ds/ref [:env :http-port])}}}}}
+             (ds/signal ::ds/start)
+             (select-keys [::ds/out])))
+      "Error messages short-circuit signal handling without failing on ref resolution"))
+
+(deftest signal-validation-short-circuit
+  (is (= #::ds{:out {:validation {:env {:http-port {:message "Intentional validation error"}}}}}
+         (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
+                   :defs {:env {:http-port #::ds{:start    (fn [{:keys [->validation]}]
+                                                             (->validation {:message "Intentional validation error"}))}}
+                          :app {:http-server #::ds{:start  config-port
+                                                   ;; This ref will always fail to resolve
+                                                   :config {:port (ds/ref [:env :http-port])}}}}}
+             (ds/signal ::ds/start)
+             (select-keys [::ds/out])))
+      "Validation messages short-circuit signal handling without failing on ref resolution"))
+
 (deftest lifecycle-values-ignored-when-not-system
   (let [expected #::ds{:instances {:env {:http-port 9090}
                                    :app {:http-server 9090}}}
