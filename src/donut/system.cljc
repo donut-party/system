@@ -830,14 +830,6 @@ Your system should have the key :donut.system/registry, with keywords as keys an
         (init-signal-computation-graph signal-name)
         (apply-signal-computation-graph))))
 
-(defn validate-instance-with-malli
-  "helper function for validating component instances with malli if a schema is
-  present."
-  [{:keys [::instance ->validation ::system]}]
-  (let [{:keys [::schema]} (::current-resolved-component system)]
-    (some-> (and schema (m/explain schema instance))
-            ->validation)))
-
 ;;---
 ;;; subsystems
 ;;---
