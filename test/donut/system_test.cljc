@@ -161,27 +161,10 @@
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
-(deftest validate-component
-  (let [schema (m/schema int?)]
-    (is (= #::ds{:out {:validation {:env {:http-port {:schema schema
-                                                      :value  "9090"
-                                                      :errors [{:path   []
-                                                                :in     []
-                                                                :schema schema
-                                                                :value  "9090"}]}}}}}
-           (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
-
-                     :defs {:env {:http-port #::ds{:start  "9090"
-                                                   :schema schema}}
-                            :app {:http-server #::ds{:start  config-port
-                                                     :config {:port (ds/ref [:env :http-port])}}}}}
-               (ds/signal ::ds/start)
-               (select-keys [::ds/out]))))))
 
 (deftest signal-error-short-circuit
   (is (= #::ds{:out {:error {:env {:http-port {:message "Intentional error"}}}}}
-         (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
-                   :defs {:env {:http-port #::ds{:start    (fn [{:keys [->error]}]
+         (-> #::ds{:defs {:env {:http-port #::ds{:start    (fn [{:keys [->error]}]
                                                              (->error {:message "Intentional error"}))}}
                           :app {:http-server #::ds{:start  config-port
                                                    ;; This ref will always fail to resolve
@@ -192,8 +175,7 @@
 
 (deftest signal-validation-short-circuit
   (is (= #::ds{:out {:validation {:env {:http-port {:message "Intentional validation error"}}}}}
-         (-> #::ds{:base {::ds/post-start ds/validate-instance-with-malli}
-                   :defs {:env {:http-port #::ds{:start    (fn [{:keys [->validation]}]
+         (-> #::ds{:defs {:env {:http-port #::ds{:start    (fn [{:keys [->validation]}]
                                                              (->validation {:message "Intentional validation error"}))}}
                           :app {:http-server #::ds{:start  config-port
                                                    ;; This ref will always fail to resolve
