@@ -1085,7 +1085,7 @@ exception is thrown when starting other components:
                                  :stop  ...}}
     :app  {:server #::ds{:start ...}}}})
 
-(let [booted-system  (ds/signal system ::ds/start #{:boot})
+(let [booted-system  (ds/start system {} #{:boot})
       logger         (get-in booted-system [::ds/instances :boot :logger])
       error-reporter (get-in booted-system [::ds/instances :boot :error-reporter])]
   (try (ds/signal booted-system :start)
@@ -1104,6 +1104,34 @@ one. The code would look something like this:
   (or instance
       (create-logger config)))
 ```
+
+### Selecting components
+
+The `select-components` function takes two arguments, a system and a set of
+component-ids. It returns a new system with component selection noted, so that
+when you send signals to the new system the signals are only sent to the selected
+components and the components they depend on (recursively):
+
+``` clojure
+(ds/select-components system #{[:group-a :component-a] [:group-b :component-b]})
+```
+
+If you call `ds/start` on this, then only `[:group-a :component-a]` and
+`[:group-b :component-b]` will receive the start signal, as well as all the
+components they depend on.
+
+If you include a keyword in the selected components set, like
+`(ds/select-components system #{:boot})`, then all components in that group will
+be selected.
+
+The `ds/start` function can optionally take a set of selected components as a
+third argument.
+
+### Selecting all components
+
+If you want to remove the component selection, you can either `dissoc` the key
+`::ds/selected-components` from your system map or call `select-components` with
+nil: `(ds/select-components system nil)`
 
 ## Pre, post, validation, and "channels"
 
