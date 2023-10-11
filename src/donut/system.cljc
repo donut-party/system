@@ -268,9 +268,9 @@
 (defn- base-merge
   "handles merging a system base when a component is a constant"
   [component-def base]
-  (cond (and (map? base) (map? component-def)) (merge base component-def)
-        (map? base)                            (merge base {::start (constantly component-def)})
-        :else                                  (or base component-def)))
+  (if (component? component-def)
+    (merge base component-def)
+    component-def))
 
 (defn- merge-base
   "::base gives you a way to apply default config options to all components"

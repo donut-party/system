@@ -5,7 +5,6 @@
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
    [loom.graph :as lg]
-   [malli.core :as m]
    [clojure.string :as str]))
 
 (defn config-port
@@ -13,16 +12,18 @@
   (get-in opts [::ds/config :port]))
 
 (deftest merge-base-test
-  (is (= #::ds{:base {:pre-start [:foo]}
-               :defs {:app {:http-server {:pre-start  [:foo]
-                                          :post-start [:bar]}}}}
-         (#'ds/merge-base #::ds{:base {:pre-start [:foo]}
-                                :defs {:app {:http-server {:post-start [:bar]}}}})))
+  (testing "merges with components that have signals"
+    (is (= #::ds{:base {::ds/pre-start [:foo]}
+                 :defs {:app {:http-server {::ds/pre-start  [:foo]
+                                            ::ds/start identity}}}}
+           (#'ds/merge-base #::ds{:base {::ds/pre-start [:foo]}
+                                  :defs {:app {:http-server {::ds/start identity}}}}))))
 
-  (is (= [:foo]
-         (get-in (#'ds/merge-base #::ds{:base {:pre-start [:foo]}
-                                        :defs {:app {:http-server [:bar]}}})
-                 [::ds/defs :app :http-server :pre-start]))))
+  (testing "does not merge with components that don't have signals"
+    (is (= #::ds{:base {::ds/pre-start [:foo]}
+                 :defs {:app {:http-server {:no-signal [:bar]}}}}
+           (#'ds/merge-base #::ds{:base {::ds/pre-start [:foo]}
+                                  :defs {:app {:http-server {:no-signal [:bar]}}}})))))
 
 (deftest expand-refs-for-graph-test
   (is (= #::ds{:defs {:env {:http-port {:x (ds/ref [:env :bar])}}
@@ -204,16 +205,24 @@
 (deftest gen-signal-computation-graph-test
   (let [system (#'ds/gen-graphs #::ds{:defs {:env {:http-port 9090}
                                              :app {:http-server {:port (ds/ref [:env :http-port])}}}})]
-    (is (= (->> [[:env :http-port :pre-start]
-                 [:env :http-port :start]
-                 [:env :http-port :post-start]
-                 [:app :http-server :pre-start]
-                 [:app :http-server :start]
-                 [:app :http-server :post-start]]
+    (is (= (->> [[:env :http-port ::ds/pre-start]
+                 [:env :http-port ::ds/start]
+                 [:env :http-port ::ds/post-start]
+                 [:app :http-server ::ds/pre-start]
+                 [:app :http-server ::ds/start]
+                 [:app :http-server ::ds/post-start]]
                 (partition 2 1)
                 (apply lg/add-edges (lg/digraph)))
-           (#'ds/gen-signal-computation-graph system :start :reverse-topsort)))))
+           (#'ds/gen-signal-computation-graph system ::ds/start :reverse-topsort)))))
 
+(deftest pre-and-post-test
+  (testing "pre- and post- stages run in correct order when present"
+    (let [store (atom [])]
+      (ds/start {::ds/defs
+                 {:group {:component {::ds/pre-start (fn [_] (swap! store conj :pre-start))
+                                      ::ds/start (fn [_] (swap! store conj :start))
+                                      ::ds/post-start (fn [_] (swap! store conj :post-start))}}}})
+      (is (= [:pre-start :start :post-start] @store)))))
 
 (deftest channel-fns-test
   (testing "can chain channel fns"
