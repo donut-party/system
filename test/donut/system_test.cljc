@@ -348,6 +348,24 @@
        (ds/signal {::ds/defs {:group {:component {:ref (ds/ref [:nonexistent])}}}}
                   ::ds/start))))
 
+(deftest ref-cycle-test
+  (is (thrown-with-msg?
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
+       #"Cycle"
+       (ds/signal {::ds/defs {:group-a {:foo (ds/ref [:group-b :component])}
+                              :group-b {:component {:foo (ds/ref [:group-a :foo])}}}}
+                  ::ds/start)))
+
+  (is (thrown-with-msg?
+       #?(:clj clojure.lang.ExceptionInfo
+          :cljs js/Object)
+       #"Cycle"
+       (ds/signal {::ds/defs {:group-a {:foo (ds/ref [:group-b :component])
+                                        :bar (ds/ref [:group-a :foo])}
+                              :group-b {:component {:foo (ds/ref [:group-a :bar])}}}}
+                  ::ds/start))))
+
 (defmethod ds/named-system ::system-config-test
   [_]
   {::ds/defs {:group {:component-a 1

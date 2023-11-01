@@ -7,6 +7,7 @@
 ### Changed
 
 - Allow strings and symbols in deep ref paths.
+- Throw an exception when the component graph contains a cycle.
 
 
 ## 2022-06-25 0.0.165

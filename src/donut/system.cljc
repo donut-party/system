@@ -594,7 +594,10 @@ Your system should have the key :donut.system/registry, with keywords as keys an
   for the given signal"
   [system signal order]
   (let [component-graph        (get-in system [::graphs order])
-        {:keys [pre post]} (handler-lifecycle-names signal)]
+        {:keys [pre post]} (handler-lifecycle-names signal)
+        sorted-graph (la/topsort component-graph)]
+    (when-not sorted-graph
+      (throw (ex-info "Cycle detected" {})))
     (reduce (fn [computation-graph component-node]
               (let [;; generate nodes and edges just for the lifecycle of this
                     ;; component's signal handler
@@ -610,7 +613,7 @@ Your system should have the key :donut.system/registry, with keywords as keys an
                         computation-graph
                         successors)))
             (lg/digraph)
-            (la/topsort component-graph))))
+            sorted-graph)))
 
 (defn- init-signal-computation-graph
   [system signal]
