@@ -47,6 +47,10 @@
              m
              update-many-with-map))
 
+(defn configure-component
+  [m configs]
+  (assoc-many m [::config] configs))
+
 ;;---
 ;;; specs
 ;;---

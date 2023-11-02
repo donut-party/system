@@ -11,6 +11,15 @@
   [opts]
   (get-in opts [::ds/config :port]))
 
+(deftest configure-component-test
+  (testing "sets config path vals"
+    (is (= #::ds{:config {:foo :bar
+                          :baz {:bux :bleh}}}
+           (ds/configure-component
+            {}
+            {[:foo] :bar
+             [:baz :bux] :bleh})))))
+
 (deftest merge-base-test
   (testing "merges with components that have signals"
     (is (= #::ds{:base {::ds/pre-start [:foo]}
