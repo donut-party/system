@@ -48,6 +48,7 @@
              update-many-with-map))
 
 (defn configure-component
+  "Help in setting just the config of a component"
   [m configs]
   (assoc-many m [::config] configs))
 
