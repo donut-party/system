@@ -568,8 +568,7 @@
          (ds/with-*system*
            {::ds/defs {:group-a {:a #::ds{:start  "component a"}
                                  :b #::ds{:start  "component b"}}}}
-           (::ds/instances ds/*system*)
-           ))))
+           (::ds/instances ds/*system*)))))
 
 (deftest update-many-test
   (is (= {:a {:b "FOO"
@@ -631,3 +630,23 @@
              ds/describe-system
              :group-a :e :instance))
       "Refs are resolved in the correct order inside of seqs"))
+
+(deftest stop-failed-system-test
+  (testing "stops when there's an exception during start"
+    (let [stop-check (atom nil)]
+      (try
+        (ds/with-*system* {::ds/defs {:group-a {:a #::ds{:start (fn [_])
+                                                         :stop (fn [_] (reset! stop-check true))}
+                                                :b #::ds{:start (fn [_] (throw (ex-info "test" {})))
+                                                         :config {:foo (ds/local-ref [:a])}}}}})
+        (catch #?(:clj Exception :cljs :default) _))
+      (is (= true @stop-check))))
+
+  (testing "stops when there's an exception in body of with-*system*"
+    (let [stop-check (atom nil)]
+      (try
+        (ds/with-*system* {::ds/defs {:group-a {:a #::ds{:start (fn [_])
+                                                         :stop (fn [_] (prn "stops")(reset! stop-check true))}}}}
+          (throw (ex-info "test" {})))
+        (catch #?(:clj Exception :cljs :default) _))
+      (is (= true @stop-check)))))

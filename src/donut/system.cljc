@@ -759,12 +759,13 @@ Your system should have the key :donut.system/registry, with keywords as keys an
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
-  [_system computation-stage t]
+  [system computation-stage t]
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:component      (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
             :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))}
+                               :cljs (. t -message))
+            ::system        system}
            t))
 
 (defn- apply-signal-stage
@@ -1071,14 +1072,14 @@ Your system should have the key :donut.system/registry, with keywords as keys an
 (defmacro with-*system*
   "Start a system and bind it to *system*. Stop system after body."
   [system & body]
-  `(binding [*system* (start ~system)]
-     (try (let [result# (do ~@body)]
-            (stop *system*)
-            result#)
-          (catch #?(:clj Throwable
-                    :cljs js/Error) e#
-            (stop-failed-system e#)
-            (throw e#)))))
+  `(binding [*system* (try (start ~system)
+                           (catch #?(:clj Throwable
+                                     :cljs js/Error) e#
+                             (stop-failed-system e#)
+                             (throw e#)))]
+     (try
+       ~@body
+       (finally (stop *system*)))))
 
 (defn system-fixture
   "To be used with `use-fixtures`"
