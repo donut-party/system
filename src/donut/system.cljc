@@ -774,7 +774,7 @@ Your system should have the key :donut.system/registry, with keywords as keys an
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
                             (catch #?(:clj Throwable
-                                      :cljs js/Error) t
+                                      :cljs :default) t
                               (throw (apply-signal-exception prepped-system
                                                              computation-stage-node
                                                              t))))]
@@ -1072,11 +1072,12 @@ Your system should have the key :donut.system/registry, with keywords as keys an
 (defmacro with-*system*
   "Start a system and bind it to *system*. Stop system after body."
   [system & body]
-  `(binding [*system* (try (start ~system)
-                           (catch #?(:clj Throwable
-                                     :cljs js/Error) e#
-                             (stop-failed-system e#)
-                             (throw e#)))]
+  `(binding [*system* (try
+                        (start ~system)
+                        (catch #?(:clj Throwable
+                                  :cljs :default) e#
+                          (stop-failed-system e#)
+                          (throw e#)))]
      (try
        ~@body
        (finally (stop *system*)))))
