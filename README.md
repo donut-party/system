@@ -146,7 +146,7 @@ top-level component maps, or they will be ignored. So, for example, this signal
 handler will work: `{::ds/defs {:app {:printer #::ds{:start (fn [_] ...)}}}}` but
 this one will not: `{::ds/defs {:app {:printer {:office #::ds{:start (fn [_] ...)}}}}}`.
 In the second example, the `::ds/start` key and its fn value will appear as-is in
-the started system instance.
+the started system instance because it's nested under an additional `:office` key.
 
 Let's actually interact with this system and see its behavior: 
 
