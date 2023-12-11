@@ -142,7 +142,7 @@ functions are where you specify a component's behavior.
 **NB:** You cannot arbitrarily nest components. The top-level keys in the
 `::ds/defs` map name component groups, and the keys in those maps name
 component definitions. All of the `donut.system` signal handlers must be in
-top-level component maps, or they will be ignored. So, for example, this signal
+component definition maps, or they will be ignored. So, for example, this signal
 handler will work: `{::ds/defs {:app {:printer #::ds{:start (fn [_] ...)}}}}` but
 this one will not: `{::ds/defs {:app {:printer {:office #::ds{:start (fn [_] ...)}}}}}`.
 In the second example, the `::ds/start` key and its fn value will appear as-is in
