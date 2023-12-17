@@ -48,7 +48,7 @@ The result is that the components are defined using just maps and functions:
 
 Maps and functions are as basic as it gets in Clojure, and they're easy to reason about. For instance, this design makes the relationship between system map and system behavior straightforward. There is a direct, inspectable relationship between the component definitions found under the ~donut.system/defs~ key and the behavior that component instances produce in response to signals. The function under a component's ~:start~ key is used to handle the ~:start~ signal. There are no additional protocol resolutions, multimethod lookups, or data-as-code interpretations. You don't have to mentally perform those operations to understand what the system will do.
 
-Relying just on maps and functions make it easier to modify the system. If you want to modify a component defition -- to provide a test mock, for example -- then all you need to do ~assoc-in~ on the system map.
+Relying just on maps and functions make it easier to modify the system. If you want to modify a component definition -- to provide a test mock, for example -- then all you need to do ~assoc-in~ on the system map.
 
 Let's compare this to alternative libraries.
 
