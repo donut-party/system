@@ -9,7 +9,7 @@ a way that&rsquo;s coherent, such that the system as a whole remains
 comprehensible and it&rsquo;s possible to grow, debug, and maintain the
 application with minimal confusion.
 
-donut.system is a *depdendency injection* library that helps you manage this
+donut.system is a *dependency injection* library that helps you manage this
 source of complexity. It helps you in the following ways:
 
 - It provides *system* and *component* abstractions that give your application
