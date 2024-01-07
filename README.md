@@ -1366,8 +1366,36 @@ To use a plugin, add it to a vector under `::ds/plugins` in your system map:
 ### Inspecting plugins
 
 I want it to be easy to understand what a plugin has done to your system. Right
-now, the function `donut.system.plugin` can take a system as an argument and
-produce descriptions of how each plugin has modified the system.
+now, the function `donut.system.plugin/describe-plugins` can take a system as an
+argument and produce descriptions of how each plugin has modified the system.
+Example return value for
+[donut.endpoint.test.harness/test-harness-plugin](https://github.com/donut-party/endpoint-test):
+
+``` clojure
+[{:donut.system.plugin/name
+  :donut.endpoint.test.harness/test-harness-plugin
+
+  :donut.system/doc
+  "Configures system so that donut.endpoint.test.harness can find the
+   components needed to construct and dispatch requests."
+
+  :donut.system.plugin/system-defaults
+  #:donut.system{:registry #:donut{:endpoint-router [:routing :router]
+                                   :http-handler    [:http :handler]}
+                 :defs     #:donut.endpoint.test.harness{:config
+                                                         {:default-request-content-type
+                                                          :transit-json}}}
+  :donut.system.plugin/system-update
+  nil
+
+  :donut.system.plugin/system-diff
+  (nil
+   #:donut.system{:defs     {:donut.endpoint.test.harness/config
+                             {:default-request-content-type
+                              :transit-json}}
+                  :registry #:donut{:endpoint-router [:routing :router]
+                                    :http-handler    [:http :handler]}})}]
+```
 
 ### Defining a plugin
 
@@ -1386,6 +1414,8 @@ Not currently used, but this is where a docstring goes
 
 This gets merged with a system via `(merge system-defaults system)`, meaning
 that any values in your system map take precedence over those in the plugin.
+One use case for this is if your plugin relies on some configuration, and you
+want to provide defaults that can be overridden.
 
 **`:donut.system.plugin/system-merge`**
 
@@ -1414,6 +1444,10 @@ Example plugin definition:
                    :donut/http-handler    [:http :handler]}
     ::ds/defs     {::config {:default-request-content-type :transit-json}}}})
 ```
+
+This example uses `:donut.system.plugin/system-defaults` - the purpos in this
+case is to provide some default configuration values that you can override in
+your system definition.
 
 ## Subsystems
 
