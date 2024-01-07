@@ -1611,11 +1611,11 @@ have local refs to each other. Here's how you could do that:
 (def CoolLibComponentGroup
   {:component-a #:donut.system{:start (fn [_] ...)}
    :component-b #:donut.system{:start  (fn [{{:keys [component-a]} :donut.system/config}])
-                               :config {:component-a [:donut.system/ref :component-a]}}})
+                               :config {:component-a [:donut.system/local-ref [:component-a]]}}})
 ```
 
-The key is that refs are represented with the vector `[:donut.system/ref
-ref-key]`.
+The key is that local refs are represented with the vector
+`[:donut.system/local-ref ref-key]`.
 
 Whether or not this is actually a good idea remains to be seen, but my hope is
 that it will provide a better foundation for writing higher-level, composable
