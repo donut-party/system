@@ -29,7 +29,7 @@
                                        (apply ds/start system args))))
     ::ds/start
     (catch ExceptionInfo e
-      (ds/stop-failed-system)
+      (ds/stop-failed-system e)
       (throw e))))
 
 (defn stop
