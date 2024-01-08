@@ -167,9 +167,12 @@ involved.
 
 The return value of a signal handler becomes the component's _instance._ A
 component instance is typically some object that you can use to stop the
-component. `(ds/signal system ::ds/start)` returns an updated system map that
-includes component instances. If you send another signal to the updated system
-map, it can use those instances. In the example above, we call `(ds/signal
+component; In our printer example the `::ds/start` signal handler returns a
+future whose execution we can stop with `future-cancel`. 
+
+`(ds/signal system ::ds/start)` returns an updated system map that includes
+component instances. If you send another signal to the updated system map, it
+can use those instances. In the example above, we call `(ds/signal
 running-system ::ds/stop)` to send the `::ds/stop` signal, and its signal
 handler cancels the future returned by the `::ds/start` signal handler.
 
@@ -244,9 +247,22 @@ this system with a single component definition shows:
 (def system {::ds/defs {:services {:stack Stack}}})
 ```
 
-Components are organized under _component groups_. I cover some interesting
-things you can do with groups below, but for now you can just consider them an
-organizational aid. This system map includes the component group `:services`.
+Component definitions are organized as direct children under _component groups_,
+so that your `::ds/defs` map must follow this structure:
+
+``` clojure
+{:component-group-name-1
+ {:component-name-1 {...}
+  :component-name-2 {...}}
+
+ :component-group-name-2
+ {:component-name-1 {...}
+  :component-name-2 {...}}}
+```
+
+I cover some interesting things you can do with groups below, but for now you
+can just consider them an organizational aid. The system map above includes the
+component group `:services`.
 
 (Note that there's no special reason to break out the `Stack` component
 definition into a top-level var. I just thought it would make the example more
@@ -257,14 +273,11 @@ _instances_ and implement component behavior. A def can also contain additional
 configuration values that will get passed to the signal handlers.
 
 In the example above, we've defined a `::ds/start` signal handlers. Signal
-handlers are just functions with one argument, a map. What is included in this
-map?
-
-This map includes the key `::ds/config`, and its value is taken from the
-`::ds/config` key in your component definition. In the example above, that means
-that the map will contain `{:items 10}`. You can see that the `::ds/start`
-signal handler destructures `::ds/config` out of its first argument, and then
-looks up `:items`.
+handlers are just functions with one argument, a map. This map includes the key
+`::ds/config`, and its value is taken from the `::ds/config` key in your
+component definition. In the example above, that means that the map will contain
+`{:items 10}`. You can see that the `::ds/start` signal handler destructures
+`::ds/config` out of its first argument, and then looks up `:items`.
 
 (Other key/value pairs get added to the signal handler's map, and I'll cover
 those as we need them.)
@@ -376,7 +389,7 @@ ref. Something like this wont' work:
 ```
 
 It won't work because you `ds/ref` resides inside a function definition that
-isn't reachable by `get-in`.
+isn't reachable by `(get-in system [:app :printer ::ds/start])`.
 
 ## Constant instances
 
@@ -432,17 +445,17 @@ of a communication primitive like a socket or a semaphor. That's not the case.
 Internally, it's all just plain ol' function calls. If I talk about "sending" a
 signal, nothing's actually being sent. And anyway, even if something were
 getting sent, that shouldn't matter to you in using the library; it would be an
-implementation detail that should be transparent to .
+implementation detail that should be transparent to you.
 
 donut.system provides some sugar for built-in signals: instead of calling
 `(ds/signal system ::ds/start)` you can call `(ds/start system)`.
 
 ## Custom signals
 
-There's a more interesting reason for the use of _signal_, though: I want signal
-handling to be extensible. Other component libraries use the term _lifecycle_,
-which I think doesn't convey the sense of extensibility that's possible with
-donut.system.
+There's a more interesting reason for using the term _signal_, though: I want
+signal handling to be extensible. Other component libraries use the term
+_lifecycle_, which I think doesn't convey the sense of extensibility that's
+possible with donut.system.
 
 Out of the box, donut.system recognizes `::ds/start`, `::ds/stop`,
 `::ds/suspend`, and `::ds/resume` signals, but it's possible to handle arbitrary
@@ -656,10 +669,6 @@ Then create `dev/src/dev.clj` and put this in it:
 
 (nsrepl/set-refresh-dirs "dev/src" "src" "test")
 
-(defn routes
-  []
-  (get-in dsrs/system [::ds/defs :env :http/routes]))
-
 (def start dsr/start)
 (def stop dsr/stop)
 (def restart dsr/restart)
@@ -668,6 +677,7 @@ Then create `dev/src/dev.clj` and put this in it:
   [_]
   (ds/system :dev))
 
+;; start the system when the dev namespace gets loaded
 (when-not dsrs/system
   (dsr/start))
 ```
@@ -708,7 +718,7 @@ Next create `dev/src/dev/repl.clj` and put this in it:
   (beholder/stop watcher))
 ```
 
- merge this configuration into your `deps.edn` file:
+and merge this configuration into your `deps.edn` file:
 
 ``` clojure
 {:aliases
