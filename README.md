@@ -4,7 +4,8 @@
   srcset="docs/img/donut-graph.jpg, /img/donut-graph@2x.jpg 2x"
   src="docs/img/donut-graph@2x.jpg"
   alt="donut graph"
-  style="width: 40%; float: right"/>
+  align="right"
+  style="width: 40%;"/>
 
 [![Clojars Project](https://img.shields.io/clojars/v/party.donut/system.svg)](https://clojars.org/party.donut/system)
 
