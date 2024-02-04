@@ -27,8 +27,8 @@ helps you manage this source of complexity. With it, you can:
   tools for documenting and visualizing your system so that it remains
   understandable as it grows.
 - **Easily mock components for tests:** Having a clear and consistent way to
-  mock out components to, for example, test interactions with a payment process
-  will make your life easier.
+  mock out components to test interactions with a payment processor (for
+  example) will make your life easier.
 - **Enable more complex reuse:** Reusing pure functions in Clojure is easy.
   Reusing components that combine processes and state, not so much. donut.system
   lays a foundation that makes it possible to reuse not just individual
