@@ -1,38 +1,42 @@
 # donut.system
 
+<img
+  srcset="docs/img/donut-graph.jpg, /img/donut-graph@2x.jpg 2x"
+  src="docs/img/donut-graph@2x.jpg"
+  alt="donut graph"
+  style="width: 40%"/>
+
 [![Clojars Project](https://img.shields.io/clojars/v/party.donut/system.svg)](https://clojars.org/party.donut/system)
 
-As a developer, one of your tasks is decomposing an application into logically
-coherent, reusable, loosely-coupled components that can be understood and tested
-in isolation. Another task is coordinating these components -- composing them in
-a way that&rsquo;s coherent, such that the system as a whole remains
-comprehensible and it&rsquo;s possible to grow, debug, and maintain the
-application with minimal confusion.
+As a developer, one of your tasks is decomposing an application into coherent,
+reusable, loosely-coupled components that can be understood and tested in
+isolation. Another task is coordinating these components -- composing them in
+such a way that system as a whole remains comprehensible and it's
+possible to grow, debug, and maintain the application with minimal confusion.
 
-donut.system is a *dependency injection* library that helps you manage this
-source of complexity. It helps you in the following ways:
+donut.system is a data-driven architecture toolkit for Clojure applications that
+helps you manage this source of complexity. With it, you can:
 
-- It provides *system* and *component* abstractions that give your application
-  a comprehensible structure
-- It provides a means of composing components
-- It provides a structure for defining component behavior
-- It makes loose coupling possible
-- It makes it easier to test your system
-- It aids in understanding the scope of your system and how the pieces interact
-
-Examples of components you might need in your system include:
-
-- A database threadpool
-- A messaging or queueing system
-- A job scheduler
-
-Something that these components have in common is that they have stateful
-behaviors, claiming resources like threads and reading and writing to other
-resources. They could also have dependencies that determine the order in which
-they're started and stopped: your job scheduler might use your database as its
-data store, and therefore can't be started until after your db threadpool is
-created. donut.system makes sure that these behaviors happen in the correct
-order.
+- **Organize your application as a system of components:** We make sense of
+  applications by breaking them down into _collections of processes and state
+  that produce behavior to achieve some task_ -- aka _components_. Clojure has no
+  built-in constructs for defining components. This library fills that gap.
+- **Understand your system:** As your application grows, it can be difficult to
+  keep track of what components do and how they interact. donut.system provides
+  tools for documenting and visualizing your system so that it remains
+  understandable as it grows.
+- **Easily mock components for tests:** Having a clear and consistent way to
+  mock out components to, for example, test interactions with a payment process
+  will make your life easier.
+- **Enable more complex reuse:** Reusing pure functions in Clojure is easy.
+  Reusing components that combine processes and state, not so much. donut.system
+  lays a foundation that makes it possible to reuse not just individual
+  components, but groups of components that can produce complex behavior.
+- **Manage system start and shutdown:** Components often have to be started and
+  stopped in dependency order: your job scheduler might use your database as its
+  data store, and therefore can't be started until after your db threadpool is
+  created. donut.system makes sure that these behaviors happen in the correct
+  order.
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
