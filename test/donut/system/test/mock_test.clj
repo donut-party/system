@@ -26,7 +26,7 @@
       (is (dstm/called? [:group-a :component-a]))
       (is (dstm/called-with? [:group-a :component-a] [1 2 3])))))
 
-(deftest test-caled-multiple-times?
+(deftest test-called-multiple-times?
   (let [system (ds/start test-system {[:group-a :component-c] #::ds{:start  (fn [{:keys [::ds/config]}]
                                                                               (let [{:keys [component-a]} config]
                                                                                 (component-a :component-c)))
