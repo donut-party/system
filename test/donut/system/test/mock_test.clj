@@ -33,7 +33,7 @@
                                                                     :config {:component-a (ds/local-ref [:component-a])}}})]
     (is (= [[[:group-a :component-a] [1 2 3]]
             [[:group-a :component-a] [:component-c]]]
-           @(ds/instance system [::ds/registry ::dstm/mock-calls])))))
+           @(ds/instance system [dstm/COMPONENT-GROUP-NAME :mock-calls])))))
 
 (deftest test-new-atom-per-system-start
   (testing "does not reuse atom between system starts"
@@ -43,4 +43,4 @@
                      (ds/start))]
       ;; would have two recordings instead of just one of item were reused
       (is (= [[[:group-a :component-a] [1 2 3]]]
-             @(ds/instance system [::ds/registry ::dstm/mock-calls]))))))
+             @(ds/instance system [dstm/COMPONENT-GROUP-NAME :mock-calls]))))))

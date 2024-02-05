@@ -3,6 +3,9 @@
   (:require
    [donut.system :as ds]))
 
+(def COMPONENT-GROUP-NAME :donut.system.test/mock)
+(def COMPONENT-ID [COMPONENT-GROUP-NAME :mock-calls])
+
 (def MockFnComponent
   "For mocking components whose instances are a function. Records all calls to the
   function as a tuple of
@@ -23,7 +26,7 @@
                         (return)
                         return))))
         :config {:return     nil
-                 :mock-calls (ds/ref [::ds/registry ::mock-calls])}})
+                 :mock-calls (ds/ref COMPONENT-ID)}})
 
 (defn called?
   "check that a component fn was called at all"
@@ -32,14 +35,14 @@
   ([system component-id]
    (filter (fn [[called-component-id]]
              (= component-id called-component-id))
-           @(ds/instance system [::ds/registry ::mock-calls]))))
+           @(ds/instance system COMPONENT-ID))))
 
 (defn called-with?
   "check that a component fn was called with args"
   ([component-id args]
    (called-with? ds/*system* component-id args))
   ([system component-id args]
-   (->> @(ds/instance system [::ds/registry ::mock-calls])
+   (->> @(ds/instance system COMPONENT-ID)
         (filter (fn [called-with] (= [component-id args] called-with)))
         first)))
 
@@ -56,5 +59,4 @@
    "Adds a component that can record calls to mock functions"
 
    :donut.system.plugin/system-defaults
-   {::ds/defs {::ds/registry           {::mock-calls (ds/ref [:donut.system.test/mock :mock-calls])}
-               :donut.system.test/mock {:mock-calls MockCallsComponent}}}})
+   {::ds/defs {COMPONENT-GROUP-NAME {:mock-calls MockCallsComponent}}}})
