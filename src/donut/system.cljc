@@ -124,12 +124,6 @@
 (def ComponentSelection
   [:or ComponentGroupName ComponentId])
 
-(def RegistryKey
-  keyword?)
-
-(def Registry
-  [:map-of RegistryKey ComponentId])
-
 (def PluginSystem
   [:map
    [::defs {:optional true} ComponentGroups]
@@ -153,11 +147,9 @@
    [::out {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
    [::selected-component-ids {:optional true} [:set ComponentSelection]]
-   [::registry {:optional true} Registry]
    [::plugins {:optional true} [:vector Plugin]]])
 
 (def system? (m/validator DonutSystem))
-
 
 (def DeepRefPathKey
   [:or keyword? string? symbol?])
@@ -187,20 +179,8 @@
    [:ref-type [:enum ::ref]]
    [:ref-key RefKey]])
 
-(def RegistryRefKey
-  [:and
-   [:vector :any]
-   [:catn
-    [:registry-key RegistryKey]
-    [:deep-ref-path [:* DeepRefPathKey]]]])
-
-(def RegistryRef
-  [:catn
-   [:ref-type [:enum ::registry-ref]]
-   [:ref-key RegistryRefKey]])
-
 (def DonutRef
-  [:or Ref LocalRef RegistryRef])
+  [:or Ref LocalRef])
 
 ;;---
 ;;; schema predicates
@@ -218,7 +198,6 @@
 
 (defn ref [k] (ensure-valid-ref [::ref k]))
 (defn local-ref [k] (ensure-valid-ref [::local-ref k]))
-(defn registry-ref [k] (ensure-valid-ref [::registry-ref k]))
 (def ref-key second)
 
 (defn group-ref?
@@ -363,15 +342,6 @@
        :else (into (empty p) xs)))
    m))
 
-(defn registry-ref->ref
-  [system registry-key]
-  (if-let [component-id (get-in system [::registry (first registry-key)])]
-    (ref (into component-id (rest registry-key)))
-    (throw (ex-info ":donut.system/registry does not contain registry-key
-Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
-                    {:registry-key          registry-key
-                     :donut.system/registry (:donut.system/registry system)}))))
-
 (defn- resolve-component-refs [system component-def component-id]
   (let [zipper (map-vec-zipper component-def)]
     (zip-walk (fn [loc]
@@ -388,11 +358,6 @@ Your system should have the key :donut.system/registry, with keywords as keys an
                      loc
                      (resolve-ref system component-id (ref (into [(first component-id)]
                                                                  (ref-key node)))))
-
-                    (= ::registry-ref rt)
-                    (zip/replace
-                     loc
-                     (resolve-ref system component-id (registry-ref->ref system (ref-key node))))
 
                     :else
                     loc)))
@@ -476,9 +441,6 @@ Your system should have the key :donut.system/registry, with keywords as keys an
 
                                                     (= ::ref rt)
                                                     x
-
-                                                    (= ::registry-ref rt)
-                                                    (registry-ref->ref expanded-system (ref-key x))
 
                                                     :else
                                                     x)))
@@ -992,25 +954,6 @@ Your system should have the key :donut.system/registry, with keywords as keys an
        (when-not (contains? (get-in system [::defs component-group])
                             component-name)
          (throw (ex-info "Component not defined" {:component-id component-id}))))))
-
-(defn registry-instance
-  "Returns a component instance for a given key, rather than a given path. Relies
-  on ::registry mapping registry keys to component paths.
-
-  For cases where libraries want to use component instances without having to
-  rely on hard-coded paths."
-  [system registry-key]
-  (if-let [component-id (get-in system [::registry registry-key])]
-    (if-let [component-instance (flat-get-in system [::instances component-id])]
-      component-instance
-      (throw (ex-info "No component instance found for registry key.
-Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
-                      {:registry-key registry-key
-                       :component-id component-id})))
-    (throw (ex-info ":donut.system/registry does not contain registry-key
-Your system should have the key :donut.system/registry, with keywords as keys and valid component paths as values."
-                    {:registry-key          registry-key
-                     :donut.system/registry (:donut.system/registry system)}))))
 
 (defn component-doc
   [system component-id]

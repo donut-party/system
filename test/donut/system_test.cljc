@@ -449,47 +449,6 @@
          (is (= [:group :component]
                 (:component (ex-data e)))))))
 
-(deftest get-registry-instance-test
-  (let [system (-> {::ds/registry {:the-boop [:app :boop]}
-                    ::ds/defs {:app {:boop #::ds{:start "no boop"}}}}
-                   (ds/start))]
-    (is (= "no boop" (ds/registry-instance system :the-boop)))))
-
-(deftest registry-instance-exception-test
-  (is (thrown-with-msg?
-       #?(:clj clojure.lang.ExceptionInfo
-          :cljs js/Object)
-       #":donut.system/registry does not contain registry-key"
-       (-> {::ds/defs {:group {:component "constant"}}}
-           ds/start
-           (ds/registry-instance :no-registry-key))))
-
-  (is (thrown-with-msg?
-       #?(:clj clojure.lang.ExceptionInfo
-          :cljs js/Object)
-       #"No component instance found for registry key."
-       (-> {::ds/registry {:a-key [:bad :path]}
-            ::ds/defs {:group {:component "constant"}}}
-           ds/start
-           (ds/registry-instance :a-key)))))
-
-(deftest registry-refs-test
-  (let [system (-> {::ds/registry {:the-beep [:app :beep]
-                                   :the-boop [:app :boop]}
-                    ::ds/defs     {:app {:beep      #::ds{:start {:a 1 :b 2}}
-                                         :boop      #::ds{:start "boop"}
-                                         :deep1     #::ds{:start #(::ds/config %)
-                                                          :config {:beep-dep-a (ds/registry-ref [:the-beep :a])}}
-                                         :uses-boop #::ds{:start  (fn [{:keys [::ds/config]}]
-                                                                    [:uses-boop (:boop-dep config)])
-                                                          :config {:boop-dep (ds/registry-ref [:the-boop])}}}}}
-                   (ds/start))]
-    (is (= [:uses-boop "boop"]
-           (ds/instance system [:app :uses-boop])))
-    (is (= {:beep-dep-a 1}
-           (ds/instance system [:app :deep1]))
-        "deep refs work in registry refs")))
-
 (deftest component-ids-test
   (is (= [[:group-a :a]
           [:group-a :b]
