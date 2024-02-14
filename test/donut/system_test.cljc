@@ -171,29 +171,6 @@
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
-
-(deftest signal-error-short-circuit
-  (is (= #::ds{:out {:error {:env {:http-port {:message "Intentional error"}}}}}
-         (-> #::ds{:defs {:env {:http-port #::ds{:start    (fn [{:keys [->error]}]
-                                                             (->error {:message "Intentional error"}))}}
-                          :app {:http-server #::ds{:start  config-port
-                                                   ;; This ref will always fail to resolve
-                                                   :config {:port (ds/ref [:env :http-port])}}}}}
-             (ds/signal ::ds/start)
-             (select-keys [::ds/out])))
-      "Error messages short-circuit signal handling without failing on ref resolution"))
-
-(deftest signal-validation-short-circuit
-  (is (= #::ds{:out {:validation {:env {:http-port {:message "Intentional validation error"}}}}}
-         (-> #::ds{:defs {:env {:http-port #::ds{:start    (fn [{:keys [->validation]}]
-                                                             (->validation {:message "Intentional validation error"}))}}
-                          :app {:http-server #::ds{:start  config-port
-                                                   ;; This ref will always fail to resolve
-                                                   :config {:port (ds/ref [:env :http-port])}}}}}
-             (ds/signal ::ds/start)
-             (select-keys [::ds/out])))
-      "Validation messages short-circuit signal handling without failing on ref resolution"))
-
 (deftest lifecycle-values-ignored-when-not-system
   (let [expected #::ds{:instances {:env {:http-port 9090}
                                    :app {:http-server 9090}}}
@@ -233,19 +210,6 @@
                                       ::ds/post-start (fn [_] (swap! store conj :post-start))}}}})
       (is (= [:pre-start :start :post-start] @store)))))
 
-(deftest channel-fns-test
-  (testing "can chain channel fns"
-    (is (= #::ds{:instances {:app {:http-server 9090
-                                   :http-port   9090}}
-                 :out       {:info {:app {:http-server "info"}}}}
-           (-> #::ds{:defs {:app {:http-server #::ds{:start  (fn [{:keys [::ds/config ->instance ->info]}]
-                                                               (-> (->instance (:port config))
-                                                                   (->info "info")))
-                                                     :config {:port (ds/local-ref [:http-port])}}
-                                  :http-port   9090}}}
-               (ds/signal ::ds/start)
-               (select-keys [::ds/instances ::ds/out]))))))
-
 (deftest subsystem-test
   (let [subsystem #::ds{:defs
                         {:local {:port 9090}
@@ -253,13 +217,9 @@
                          :app
                          {:local  #::ds{:start (fn [_] :local)}
                           :server #::ds{:start      (fn [{:keys [::ds/config]}] config)
-                                        :post-start (fn [{:keys [->info]}]
-                                                      (->info "started"))
                                         :stop       (fn [{:keys [::ds/instance]}]
                                                       {:prev instance
                                                        :now  :stopped})
-                                        :post-stop  (fn [{:keys [->info]}]
-                                                      (->info "stopped"))
                                         :config     {:job-queue (ds/ref [:common-services :job-queue])
                                                      :db        (ds/ref [:common-services :db])
                                                      :port      (ds/ref [:local :port])
@@ -289,9 +249,6 @@
             :local     :local}
            (get-in started [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
            (get-in started [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
-    (is (= "started"
-           (get-in started [::ds/out :info :sub-systems :system-1 :app :server])
-           (get-in started [::ds/out :info :sub-systems :system-2 :app :server])))
 
     (let [stopped (ds/signal started ::ds/stop)]
       (is (= {:prev {:job-queue "job queue"
@@ -300,11 +257,7 @@
                      :local     :local}
               :now  :stopped}
              (get-in stopped [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
-             (get-in stopped [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
-
-      (is (= "stopped"
-             (get-in stopped [::ds/out :info :sub-systems :system-1 :app :server])
-             (get-in stopped [::ds/out :info :sub-systems :system-2 :app :server]))))))
+             (get-in stopped [::ds/instances :sub-systems :system-2 ::ds/instances :app :server]))))))
 
 (deftest select-components-test
   (testing "if you specify components, the union of their subgraphs is used"

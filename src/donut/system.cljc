@@ -530,11 +530,7 @@
 
 (defn- channel-fns
   [system component-id]
-  {:->info       (channel-fn system [::out :info] component-id)
-   :->error      (channel-fn system [::out :error] component-id)
-   :->warn       (channel-fn system [::out :warn] component-id)
-   :->validation (channel-fn system [::out :validation] component-id)
-   :->instance   (channel-fn system [::instances] component-id)})
+  {:->instance (channel-fn system [::instances] component-id)})
 
 ;;---
 ;;; computation graph
@@ -713,11 +709,10 @@
   b) resolve all refs for that component
   c) track the updated component def which has refs resolved"
   [system component-id]
-  (let [part-prepped (-> system
-                         (assoc ::component-id component-id
-                                ::component-def (get-in system (into [::defs] component-id)))
-                         (resolve-refs component-id))]
-    (assoc part-prepped ::current-resolved-component (resolved part-prepped))))
+  (-> system
+      (assoc ::component-id component-id
+             ::component-def (get-in system (into [::defs] component-id)))
+      (resolve-refs component-id)))
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
@@ -834,40 +829,19 @@
                  (fn [system]
                    (merge-imports system parent-system)))))
 
-(defn- forward-channel
-  "used to make all channel 'output' available at the top level"
-  [parent-system channel component-id]
-  (if-let [chan-val (flat-get-in parent-system [::instances component-id channel])]
-    (assoc-in parent-system
-              (into channel component-id)
-              chan-val)
-    parent-system))
-
-(defn- forward-channels
-  [{:keys [::component-id] :as parent-system}]
-  (-> parent-system
-      (forward-channel [::out :info] component-id)
-      (forward-channel [::out :error] component-id)
-      (forward-channel [::out :warn] component-id)
-      (forward-channel [::out :validation] component-id)))
-
 (defn- forward-start-signal
   [signal-name]
-  (fn [{:keys [->instance ::system]}]
-    (-> system
-        ::current-resolved-component
-        ::subsystem
+  (fn [{:keys [->instance ::subsystem]}]
+    (-> subsystem
         (signal signal-name)
-        ->instance
-        forward-channels)))
+        ->instance)))
 
 (defn- forward-signal
   [signal-name]
   (fn [{:keys [::instance ->instance]}]
     (-> instance
         (signal signal-name)
-        ->instance
-        forward-channels)))
+        ->instance)))
 
 (defn subsystem-component
   "Decorates a subsystem so that it can respond to signals when embedded in a
