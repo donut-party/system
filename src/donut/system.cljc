@@ -517,22 +517,6 @@
         (assoc-in [::graphs :reverse-topsort] reversed))))
 
 ;;---
-;;; channel fns
-;;---
-
-(defn- channel-fn
-  [system channel component-id]
-  (fn ->channel
-    ([v]
-     (->channel system v))
-    ([s v]
-     (assoc-in s (into channel component-id) v))))
-
-(defn- channel-fns
-  [system component-id]
-  {:->instance (channel-fn system [::instances] component-id)})
-
-;;---
 ;;; computation graph
 ;;---
 ;;
@@ -599,8 +583,7 @@
      (cond-> {::instance     (flat-get-in system [::instances component-id])
               ::system       system
               ::component-id component-id}
-       (map? resolved-def) (merge resolved-def)
-       true                (merge (channel-fns system component-id))))))
+       (map? resolved-def) (merge resolved-def)))))
 
 (defn- stage-result-valid?
   [system]
@@ -831,17 +814,17 @@
 
 (defn- forward-start-signal
   [signal-name]
-  (fn [{:keys [->instance ::subsystem]}]
-    (-> subsystem
-        (signal signal-name)
-        ->instance)))
+  (fn [{:keys [::subsystem ::system ::component-id]}]
+    (assoc-in system
+              (into [::instances] component-id)
+              (signal subsystem signal-name))))
 
 (defn- forward-signal
   [signal-name]
-  (fn [{:keys [::instance ->instance]}]
-    (-> instance
-        (signal signal-name)
-        ->instance)))
+  (fn [{:keys [::instance ::system ::component-id]}]
+    (assoc-in system
+              (into [::instances] component-id)
+              (signal instance signal-name))))
 
 (defn subsystem-component
   "Decorates a subsystem so that it can respond to signals when embedded in a
