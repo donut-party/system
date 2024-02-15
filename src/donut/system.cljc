@@ -585,13 +585,6 @@
               ::component-id component-id}
        (map? resolved-def) (merge resolved-def)))))
 
-(defn- stage-result-valid?
-  [system]
-  (-> system
-      ::out
-      (select-keys [:error :validation])
-      empty?))
-
 ;; copied from loom.graph to work around its bizarre cljs (:in g) issue
 (defn- remove-adj-nodes [m nodes adjacents remove-fn]
   (reduce
@@ -610,18 +603,6 @@
         (update-in [:nodeset] #(apply disj % nodes))
         (assoc :adj (remove-adj-nodes (:adj g) nodes ins disj))
         (assoc :in (remove-adj-nodes (:in g) nodes outs disj)))))
-
-(defn- prune-signal-computation-graph
-  "remove subgraph reachable from computation-stage-node to prevent those
-  handlers/lifecycles from being applied"
-  [system computation-stage-node]
-  (update system
-          ::signal-computation-graph
-          (fn [graph]
-            (->> computation-stage-node
-                 (ld/subgraph-reachable-from graph)
-                 (lg/nodes)
-                 (remove-nodes graph)))))
 
 (defn- remove-signal-computation-stage-node
   [system computation-stage-node]
@@ -718,9 +699,7 @@
                               (throw (apply-signal-exception prepped-system
                                                              computation-stage-node
                                                              t))))]
-    (if (stage-result-valid? new-system)
-      (remove-signal-computation-stage-node new-system computation-stage-node)
-      (prune-signal-computation-graph new-system computation-stage-node))))
+    (remove-signal-computation-stage-node new-system computation-stage-node)))
 
 (defn- apply-signal-computation-graph
   [system]
