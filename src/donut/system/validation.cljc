@@ -6,19 +6,24 @@
    [malli.error :as me]))
 
 (defn validate
-  [->validation schema x]
+  [schema x scheme-key]
   (when-let [explanation (and schema (m/explain schema x))]
-    (->validation
-     {:spec-explain-human (me/humanize explanation)
-      :spec-explain       explanation})))
+    (throw (ex-info "scheme found invalid component data"
+                    {:scheme-key         scheme-key
+                     :spec-explain-human (me/humanize explanation)
+                     :spec-explain       explanation}))))
 
 (defn validate-def-pre-start
-  [{:keys [->validation ::ds/pre-start-schema] :as component-def}]
-  (validate ->validation pre-start-schema component-def))
+  [{:keys [::ds/pre-start-schema] :as component-def}]
+  (validate pre-start-schema component-def ::ds/pre-start-schema))
 
 (defn validate-instance
-  [{:keys [->validation ::ds/instance ::ds/instance-schema]}]
-  (validate ->validation instance-schema instance))
+  [{:keys [::ds/instance ::ds/instance-schema]}]
+  (validate instance-schema instance ::ds/instance-schema))
+
+(defn validate-config
+  [{:keys [::ds/config-schema ::ds/config] :as _component-def}]
+  (validate config-schema config ::ds/config-schema))
 
 (def validation-plugin
   #::dsp{:name
@@ -28,5 +33,6 @@
          "Updates pre-start and post-start to validate configs and instances"
 
          :system-defaults
-         {::ds/base {::ds/pre-start  validate-def-pre-start
-                     ::ds/post-start validate-instance}}})
+         {::ds/base {::ds/pre-start  {::validate-pre-start validate-def-pre-start
+                                      ::validate-config    validate-config}
+                     ::ds/post-start {::validate validate-instance}}}})

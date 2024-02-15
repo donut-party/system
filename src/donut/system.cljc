@@ -617,10 +617,18 @@
         stage-fn     (or (flat-get-in system [::resolved-defs computation-stage-node])
                          system-identity)]
     (fn [system]
-      (let [stage-result (apply-stage-fn system stage-fn component-id)]
-        (if (system? stage-result)
-          stage-result
-          system)))))
+      (if (map? stage-fn)
+        (reduce-kv (fn mapped-lifecycle-fns [system _lifecycle-fn-name lifecycle-fn]
+                     (let [stage-result (apply-stage-fn system lifecycle-fn component-id)]
+                       (if (system? stage-result)
+                         stage-result
+                         system)))
+                   system
+                   stage-fn)
+        (let [stage-result (apply-stage-fn system stage-fn component-id)]
+          (if (system? stage-result)
+            stage-result
+            system))))))
 
 (defn- handler-stage-fn
   "returns function for a handler (e.g. ::start) as opposed to a lifecycle
