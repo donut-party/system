@@ -618,6 +618,7 @@
                          system-identity)]
     (fn [system]
       (if (map? stage-fn)
+        ;; lifecycle fns can be a map to allow more than one
         (reduce-kv (fn mapped-lifecycle-fns [system _lifecycle-fn-name lifecycle-fn]
                      (let [stage-result (apply-stage-fn system lifecycle-fn component-id)]
                        (if (system? stage-result)
