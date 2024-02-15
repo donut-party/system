@@ -4,7 +4,7 @@
    [donut.system :as ds]))
 
 (def COMPONENT-GROUP-NAME :donut.system.test/mock)
-(def COMPONENT-ID [COMPONENT-GROUP-NAME :mock-calls])
+(def MOCK-CALLS-COMPONENT-ID [COMPONENT-GROUP-NAME :mock-calls])
 
 (def MockFnComponent
   "For mocking components whose instances are a function. Records all calls to the
@@ -26,23 +26,31 @@
                         (return)
                         return))))
         :config {:return     nil
-                 :mock-calls (ds/ref COMPONENT-ID)}})
+                 :mock-calls (ds/ref MOCK-CALLS-COMPONENT-ID)}})
+
+(defn calls
+  ([]
+   (calls ds/*system*))
+  ([system]
+   @(ds/instance system MOCK-CALLS-COMPONENT-ID))
+  ([system component-id]
+   (filter (fn [[called-component-id]]
+             (= component-id called-component-id))
+           @(ds/instance system MOCK-CALLS-COMPONENT-ID))))
 
 (defn called?
   "check that a component fn was called at all"
   ([component-id]
    (called? ds/*system* component-id))
   ([system component-id]
-   (filter (fn [[called-component-id]]
-             (= component-id called-component-id))
-           @(ds/instance system COMPONENT-ID))))
+   (seq (calls system component-id))))
 
 (defn called-with?
   "check that a component fn was called with args"
   ([component-id args]
    (called-with? ds/*system* component-id args))
   ([system component-id args]
-   (->> @(ds/instance system COMPONENT-ID)
+   (->> @(ds/instance system MOCK-CALLS-COMPONENT-ID)
         (filter (fn [called-with] (= [component-id args] called-with)))
         first)))
 
