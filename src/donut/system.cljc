@@ -641,19 +641,15 @@
         stage-fn     (or (flat-get-in system [::resolved-defs computation-stage-node])
                          system-identity)]
     (fn [system]
-      (if (map? stage-fn)
-        ;; lifecycle fns can be a map to allow more than one
-        (reduce-kv (fn mapped-lifecycle-fns [system _lifecycle-fn-name lifecycle-fn]
-                     (let [stage-result (apply-stage-fn system lifecycle-fn component-id)]
-                       (if (system? stage-result)
-                         stage-result
-                         system)))
-                   system
-                   stage-fn)
-        (let [stage-result (apply-stage-fn system stage-fn component-id)]
-          (if (system? stage-result)
-            stage-result
-            system))))))
+      (cond->> stage-fn
+        (map? stage-fn) vals
+        (fn? stage-fn)  vector
+        true            (reduce (fn lifecycle-fns [system lifecycle-fn]
+                                  (let [stage-result (apply-stage-fn system lifecycle-fn component-id)]
+                                    (if (system? stage-result)
+                                      stage-result
+                                      system)))
+                                system)))))
 
 (defn- handler-stage-fn
   "returns function for a handler (e.g. ::start) as opposed to a lifecycle
