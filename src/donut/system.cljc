@@ -168,7 +168,7 @@
    [::resolved-defs {:optional true} ComponentGroups]
    [::graphs {:optional true} OrderGraphs]
    [::instances {:optional true} ComponentGroups]
-   [::out {:optional true} ComponentGroups]
+   [::component-meta {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
    [::selected-component-ids {:optional true} [:set ComponentSelection]]
    [::plugins {:optional true} [:vector Plugin]]])
@@ -599,14 +599,21 @@
   [stage]
   (not (re-find #"(^pre-|^post-)" (name stage))))
 
+(def ^:dynamic *component-meta*)
+
+(defn- assoc-component-meta
+  [system component-id]
+  (flat-assoc-in system [::component-meta component-id] @*component-meta*))
+
 (defn- apply-stage-fn
   [system stage-fn component-id]
   (let [resolved-def (flat-get-in system [::resolved-defs component-id])]
     (stage-fn
      ;; construct map to pass to the `stage-fn`
-     (cond-> {::instance     (flat-get-in system [::instances component-id])
-              ::system       system
-              ::component-id component-id}
+     (cond-> {::instance       (flat-get-in system [::instances component-id])
+              ::system         system
+              ::component-id   component-id
+              ::component-meta *component-meta*}
        (map? resolved-def) (merge resolved-def)))))
 
 ;; copied from loom.graph to work around its bizarre cljs (:in g) issue
@@ -722,7 +729,10 @@
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
-        new-system     (try ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
+        _ (prn component-id (get-in system [::defs]))
+        new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
+                              (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
+                                  (assoc-component-meta component-id)))
                             (catch #?(:clj Throwable
                                       :cljs :default) t
                               (throw (apply-signal-exception prepped-system
