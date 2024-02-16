@@ -57,7 +57,8 @@
   (or (flat-get-in system [facet  component-id])
       (when-not (contains? (get-in system [::defs component-group])
                            component-name)
-        (throw (ex-info "Component not defined" {:component-id component-id})))))
+        (throw (ex-info (str "Component not defined for " facet)
+                        {:component-id component-id})))))
 
 (defn instance
   "Get a specific component instance. With no arguments returns set of all
@@ -442,34 +443,35 @@
   (reduce (fn [expanded-system component-id]
             (let [component-path (into [::defs] component-id)]
               ;; skip subsystem components
-              (if (::subsystem (get-in expanded-system component-path))
-                expanded-system
-                (update-in expanded-system
-                           component-path
-                           (fn [component-def]
-                             (if (seqable? component-def)
-                               (walk/postwalk (fn [x]
-                                                (let [rt (ref-type x)]
-                                                  (cond
-                                                    (group-ref? x)
-                                                    (let [group-name (first (ref-key x))]
-                                                      {group-name
-                                                       (->> (get-in system [::defs group-name])
-                                                            keys
-                                                            (reduce (fn [group-map k]
-                                                                      (assoc group-map k (ref [group-name k])))
-                                                                    {}))})
+              (update-in expanded-system
+                         component-path
+                         (fn [component-def]
+                           (if (seqable? component-def)
+                             (walk/postwalk (fn [x]
+                                              (let [rt (ref-type x)]
+                                                (cond
+                                                  (-> x meta :subsystem?)
+                                                  x
 
-                                                    (= ::local-ref rt)
-                                                    (ref (into [(first component-id)] (ref-key x)))
+                                                  (group-ref? x)
+                                                  (let [group-name (first (ref-key x))]
+                                                    {group-name
+                                                     (->> (get-in system [::defs group-name])
+                                                          keys
+                                                          (reduce (fn [group-map k]
+                                                                    (assoc group-map k (ref [group-name k])))
+                                                                  {}))})
 
-                                                    (= ::ref rt)
-                                                    x
+                                                  (= ::local-ref rt)
+                                                  (ref (into [(first component-id)] (ref-key x)))
 
-                                                    :else
-                                                    x)))
-                                              component-def)
-                               component-def))))))
+                                                  (= ::ref rt)
+                                                  x
+
+                                                  :else
+                                                  x)))
+                                            component-def)
+                             component-def)))))
           system
           (component-ids system)))
 
@@ -714,20 +716,23 @@
              ::component-def (get-in system (into [::defs] component-id)))
       (resolve-refs component-id)))
 
+(def thrown-system (atom nil))
+
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
   [system computation-stage t]
+  (reset! thrown-system system)
   (ex-info (str "Error on " computation-stage " when applying signal")
-           {:component      (vec (take 2 computation-stage))
+           {:component-id   (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
             :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))
-            ::system        system}
+                               :cljs (. t -message))}
            t))
 
 (defn- apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
+        _              (prn computation-stage-node)
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
                               (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
@@ -851,7 +856,10 @@
    ::mk-signal-handler forward-signal
    ::resolve-refs      subsystem-resolver
    ::imports           (mapify-imports imports)
-   ::subsystem         (-> subsystem expand-refs-for-graph)})
+   ;; TODO try removing expand-refs-graph
+   ::subsystem         (-> subsystem
+                           expand-refs-for-graph
+                           (with-meta {:subsystem? true}))})
 
 (defn alias-component
   "creates a component that just provides an instance defined elsewhere in the system"

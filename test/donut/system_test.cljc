@@ -246,7 +246,8 @@
 (deftest subsystem-ref-edges
   (is (= [[[:sub-systems :system-1] [:common-services :job-queue]]
           [[:sub-systems :system-1] [:common-services :db]]
-          [[:sub-systems :system-2] [:common-services]]]
+          [[:sub-systems :system-2] [:common-services :job-queue]]
+          [[:sub-systems :system-2] [:common-services :db]]]
          (#'ds/ref-edges system-with-subsystem :topsort))))
 
 (deftest subsystem-component-nodes-test
@@ -254,16 +255,18 @@
              (lg/add-nodes [:env :app-name])
              (lg/add-edges [[:common-services :job-queue] [:sub-systems :system-1]]
                            [[:common-services :db] [:sub-systems :system-1]]
-                           [[:common-services] [:sub-systems :system-2]]))
+                           [[:common-services :job-queue] [:sub-systems :system-2]]
+                           [[:common-services :db] [:sub-systems :system-2]]))
          (let [graph (#'ds/component-graph-nodes system-with-subsystem)]
            (#'ds/component-graph-add-edges graph system-with-subsystem :reverse-topsort)))))
 
-(deftest subsystem-computation-graph-test
+(deftest subsystem-graph-test
   (is (= (-> (lg/digraph)
              (lg/add-nodes [:env :app-name])
              (lg/add-edges [[:common-services :job-queue] [:sub-systems :system-1]]
                            [[:common-services :db] [:sub-systems :system-1]]
-                           [[:common-services] [:sub-systems :system-2]]))
+                           [[:common-services :job-queue] [:sub-systems :system-2]]
+                           [[:common-services :db] [:sub-systems :system-2]]))
          (-> system-with-subsystem
              (ds/init-system ::ds/start)
              ::ds/graphs
