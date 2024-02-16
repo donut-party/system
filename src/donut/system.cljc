@@ -442,7 +442,7 @@
   (reduce (fn [expanded-system component-id]
             (let [component-path (into [::defs] component-id)]
               ;; skip subsystem components
-              (if (::subystem (get-in expanded-system component-path))
+              (if (::subsystem (get-in expanded-system component-path))
                 expanded-system
                 (update-in expanded-system
                            component-path
@@ -482,14 +482,15 @@
                        (when (ref? x)
                          (swap! refs conj x))
                        x)
-                     component-def)
+                     (cond-> component-def
+                       (map? component-def) (dissoc ::subsystem)))
       @refs)))
 
 (defn- ref-edges
   "used to populate the component graph with directed edges"
   [system direction]
   (let [expanded-system (expand-refs-for-graph system)
-        defs (::defs expanded-system)]
+        defs            (::defs expanded-system)]
     (->>
      ;; collect all component refs for all components
      (for [k1  (keys defs)
@@ -508,8 +509,7 @@
 (defn- component-graph-add-edges
   "uses refs to build a dependency map for components"
   [graph system direction]
-  (reduce (fn [graph edge]
-            (lg/add-edges graph edge))
+  (reduce lg/add-edges
           graph
           (ref-edges system direction)))
 
@@ -564,9 +564,9 @@
   "creates the graph that should be traversed to call handler (and lifecycle) fns
   for the given signal"
   [system signal order]
-  (let [component-graph        (get-in system [::graphs order])
+  (let [component-graph    (get-in system [::graphs order])
         {:keys [pre post]} (handler-lifecycle-names signal)
-        sorted-graph (la/topsort component-graph)]
+        sorted-graph       (la/topsort component-graph)]
     (when-not sorted-graph
       (throw (ex-info "Cycle detected" {})))
     (reduce (fn [computation-graph component-node]
@@ -729,7 +729,6 @@
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
         prepped-system (prep-system-for-apply-signal-stage system component-id)
-        _ (prn component-id (get-in system [::defs]))
         new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
                               (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
                                   (assoc-component-meta component-id)))
