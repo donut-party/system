@@ -604,3 +604,13 @@
           (throw (ex-info "test" {})))
         (catch #?(:clj Exception :cljs :default) _))
       (is (= true @stop-check)))))
+
+(deftest component-meta-test
+  (let [system {::ds/defs {:group {:component #::ds{:pre-start  (fn [{:keys [::ds/component-meta]}]
+                                                                  (reset! component-meta [::ds/pre-start]))
+                                                    :start      (fn [{:keys [::ds/component-meta]}]
+                                                                  (swap! component-meta conj ::ds/start))
+                                                    :post-start (fn [{:keys [::ds/component-meta]}]
+                                                                  (swap! component-meta conj ::ds/post-start))}}}}]
+    (is (= [::ds/pre-start ::ds/start ::ds/post-start]
+           (get-in (ds/start system) [::ds/component-meta :group :component])))))
