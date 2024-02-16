@@ -210,39 +210,67 @@
                                       ::ds/post-start (fn [_] (swap! store conj :post-start))}}}})
       (is (= [:pre-start :start :post-start] @store)))))
 
+(def subsystem
+  #::ds{:defs
+        {:local {:port 9090}
+
+         :app
+         {:local  #::ds{:start (fn [_] :local)}
+          :server #::ds{:start      (fn [{:keys [::ds/config]}] config)
+                        :stop       (fn [{:keys [::ds/instance]}]
+                                      {:prev instance
+                                       :now  :stopped})
+                        :config     {:job-queue (ds/ref [:common-services :job-queue])
+                                     :db        (ds/ref [:common-services :db])
+                                     :port      (ds/ref [:local :port])
+                                     :local     (ds/local-ref [:local])}}}}})
+
+(def system-with-subsystem
+  #::ds{:defs
+        {:env
+         {:app-name "foo.app"}
+
+         :common-services
+         {:job-queue "job queue"
+          :db        "db"}
+
+         :sub-systems
+         {:system-1 (ds/subsystem-component
+                     subsystem
+                     #{(ds/ref [:common-services :job-queue])
+                       (ds/ref [:common-services :db])})
+          :system-2 (ds/subsystem-component
+                     subsystem
+                     #{(ds/ref [:common-services])})}}})
+
+(deftest subsystem-ref-edges
+  (is (= [[[:sub-systems :system-1] [:common-services :job-queue]]
+          [[:sub-systems :system-1] [:common-services :db]]
+          [[:sub-systems :system-2] [:common-services]]]
+         (#'ds/ref-edges system-with-subsystem :topsort))))
+
+(deftest subsystem-component-nodes-test
+  (is (= (-> (lg/digraph)
+             (lg/add-nodes [:env :app-name])
+             (lg/add-edges [[:common-services :job-queue] [:sub-systems :system-1]]
+                           [[:common-services :db] [:sub-systems :system-1]]
+                           [[:common-services] [:sub-systems :system-2]]))
+         (let [graph (#'ds/component-graph-nodes system-with-subsystem)]
+           (#'ds/component-graph-add-edges graph system-with-subsystem :reverse-topsort)))))
+
+(deftest subsystem-computation-graph-test
+  (is (= (-> (lg/digraph)
+             (lg/add-nodes [:env :app-name])
+             (lg/add-edges [[:common-services :job-queue] [:sub-systems :system-1]]
+                           [[:common-services :db] [:sub-systems :system-1]]
+                           [[:common-services] [:sub-systems :system-2]]))
+         (-> system-with-subsystem
+             (ds/init-system ::ds/start)
+             ::ds/graphs
+             :reverse-topsort))))
+
 (deftest subsystem-test
-  (let [subsystem #::ds{:defs
-                        {:local {:port 9090}
-
-                         :app
-                         {:local  #::ds{:start (fn [_] :local)}
-                          :server #::ds{:start      (fn [{:keys [::ds/config]}] config)
-                                        :stop       (fn [{:keys [::ds/instance]}]
-                                                      {:prev instance
-                                                       :now  :stopped})
-                                        :config     {:job-queue (ds/ref [:common-services :job-queue])
-                                                     :db        (ds/ref [:common-services :db])
-                                                     :port      (ds/ref [:local :port])
-                                                     :local     (ds/local-ref [:local])}}}}}
-
-        started (-> #::ds{:defs
-                          {:env
-                           {:app-name "foo.app"}
-
-                           :common-services
-                           {:job-queue "job queue"
-                            :db        "db"}
-
-                           :sub-systems
-                           {:system-1 (ds/subsystem-component
-                                       subsystem
-                                       #{(ds/ref [:common-services :job-queue])
-                                         (ds/ref [:common-services :db])})
-                            :system-2 (ds/subsystem-component
-                                       subsystem
-                                       #{(ds/ref [:common-services])})}}}
-                    (ds/signal ::ds/start))]
-
+  (let [started (ds/start system-with-subsystem)]
     (is (= {:job-queue "job queue"
             :db        "db"
             :port      9090
