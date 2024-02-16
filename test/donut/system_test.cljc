@@ -431,7 +431,7 @@
                   ::ds/start)
        (catch #?(:clj Exception :cljs :default) e
          (is (= [:group :component]
-                (:component (ex-data e)))))))
+                (:component-id (ex-data e)))))))
 
 (deftest component-ids-test
   (is (= [[:group-a :a]

@@ -54,7 +54,7 @@
 
 (defn get-component-facet
   [system facet [component-group component-name :as component-id]]
-  (or (flat-get-in system [facet  component-id])
+  (or (flat-get-in system [facet component-id])
       (when-not (contains? (get-in system [::defs component-group])
                            component-name)
         (throw (ex-info (str "Component not defined for " facet)
@@ -74,7 +74,7 @@
   "Get a specific component's system meta. With no arguments returns set of all
   component names."
   [system component-id]
-  (get-component-facet system ::component-meta component-id))
+  (flat-get-in system [::component-meta component-id]))
 
 
 ;;---
@@ -367,7 +367,8 @@
        :else (into (empty p) xs)))
    m))
 
-(defn- resolve-component-refs [system component-def component-id]
+(defn- resolve-component-refs
+  [system component-def component-id]
   (let [zipper (map-vec-zipper component-def)]
     (zip-walk (fn [loc]
                 (let [node (zip/node loc)
@@ -391,10 +392,10 @@
 (defn- default-resolve-refs
   [system component-id]
   (-> system
-      (flat-assoc-in [::resolved-defs component-id] (flat-get-in system [::defs component-id]))
-      (update-in
-       (into [::resolved-defs] component-id)
-       #(resolve-component-refs system % component-id))))
+      (flat-assoc-in [::resolved-defs component-id]
+                     (flat-get-in system [::defs component-id]))
+      (update-in (into [::resolved-defs] component-id)
+                 #(resolve-component-refs system % component-id))))
 
 ;; end ref resolution zipping
 
@@ -716,15 +717,13 @@
              ::component-def (get-in system (into [::defs] component-id)))
       (resolve-refs component-id)))
 
-(def thrown-system (atom nil))
-
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
   [system computation-stage t]
-  (reset! thrown-system system)
   (ex-info (str "Error on " computation-stage " when applying signal")
            {:component-id   (vec (take 2 computation-stage))
             :signal-handler (last computation-stage)
+            ::system        system
             :message        #?(:clj (.getMessage t)
                                :cljs (. t -message))}
            t))
@@ -732,7 +731,6 @@
 (defn- apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
-        _              (prn computation-stage-node)
         prepped-system (prep-system-for-apply-signal-stage system component-id)
         new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
                               (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
