@@ -273,13 +273,20 @@
              :reverse-topsort))))
 
 (deftest subsystem-test
-  (let [started (ds/start system-with-subsystem)]
+  (let [start-count (atom 0)
+        started     (ds/start system-with-subsystem
+                              {[:common-services :job-queue] {::ds/start (fn [_]
+                                                                           (swap! start-count inc)
+                                                                           "job queue")}})]
     (is (= {:job-queue "job queue"
             :db        "db"
             :port      9090
             :local     :local}
            (get-in started [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
            (get-in started [::ds/instances :sub-systems :system-2 ::ds/instances :app :server])))
+
+    (is (= 1 @start-count)
+        "parent system signals only applied once")
 
     (let [stopped (ds/signal started ::ds/stop)]
       (is (= {:prev {:job-queue "job queue"
