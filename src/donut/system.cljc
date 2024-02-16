@@ -52,6 +52,30 @@
   [m configs]
   (assoc-many m [::config] configs))
 
+(defn get-component-facet
+  [system facet [component-group component-name :as component-id]]
+  (or (flat-get-in system [facet  component-id])
+      (when-not (contains? (get-in system [::defs component-group])
+                           component-name)
+        (throw (ex-info "Component not defined" {:component-id component-id})))))
+
+(defn instance
+  "Get a specific component instance. With no arguments returns set of all
+  component names."
+  ([system]
+   (into {}
+         (for [[k m] (::instances system)]
+           [k (set (keys m))])))
+  ([system component-id]
+   (get-component-facet system ::instances component-id)))
+
+(defn component-meta
+  "Get a specific component's system meta. With no arguments returns set of all
+  component names."
+  [system component-id]
+  (get-component-facet system ::component-meta component-id))
+
+
 ;;---
 ;;; specs
 ;;---
@@ -886,19 +910,6 @@
   {::start (fn [{:keys [::system]}]
              (throw (ex-info "Need to define required component"
                              {:component-id (::component-id system)})))})
-
-(defn instance
-  "Get a specific component instance. With no arguments returns set of all
-  component names."
-  ([system]
-   (into {}
-         (for [[k m] (::instances system)]
-           [k (set (keys m))])))
-  ([system [component-group component-name :as component-id]]
-   (or (flat-get-in system [::instances  component-id])
-       (when-not (contains? (get-in system [::defs component-group])
-                            component-name)
-         (throw (ex-info "Component not defined" {:component-id component-id}))))))
 
 (defn component-doc
   [system component-id]
