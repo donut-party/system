@@ -6,10 +6,10 @@
    [malli.error :as me]))
 
 (defn validate
-  [schema x scheme-key]
+  [schema x schema-key]
   (when-let [explanation (and schema (m/explain schema x))]
-    (throw (ex-info "scheme found invalid component data"
-                    {:scheme-key         scheme-key
+    (throw (ex-info "schema found invalid component data"
+                    {:schema-key         schema-key
                      :spec-explain-human (me/humanize explanation)
                      :spec-explain       explanation}))))
 
