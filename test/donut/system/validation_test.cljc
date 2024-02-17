@@ -22,7 +22,7 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= ":donut.system.validation/invalid"
+             (is (= :donut.system.validation/invalid-instance
                     (-> e ex-data :message)))
              (reset! thrown? true)))
       (is @thrown?)
@@ -45,7 +45,7 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= ":donut.system.validation/invalid"
+             (is (= :donut.system.validation/invalid-component-config
                     (-> e ex-data :message)))
              (reset! thrown? true)))
       (is @thrown?)

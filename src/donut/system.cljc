@@ -719,14 +719,18 @@
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
-  [system computation-stage t]
-  (ex-info (str "Error on " computation-stage " when applying signal")
-           {:component-id   (vec (take 2 computation-stage))
-            :signal-handler (last computation-stage)
-            ::system        system
-            :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))}
-           t))
+  [system computation-stage throwable]
+  (let [message #?(:clj (.getMessage throwable)
+                   :cljs (. t -message))]
+    (if (re-find #"^:donut.system" message)
+      ;; let donut.system exceptions flow through
+      throwable
+      (ex-info (str "Error on " computation-stage " when applying signal")
+               {:component-id   (vec (take 2 computation-stage))
+                :signal-handler (last computation-stage)
+                ::system        system
+                :message        message}
+               throwable))))
 
 (defn- apply-signal-stage
   [system computation-stage-node]
