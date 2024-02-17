@@ -22,10 +22,11 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= "schema found invalid component data"
+             (is (= ":donut.system.validation/invalid"
                     (-> e ex-data :message)))
              (reset! thrown? true)))
-
+      (is @thrown?)
+      ;; satisfy spec
       (ds/start system))))
 
 (deftest config-schema-validation-test
@@ -44,8 +45,9 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= "schema found invalid component data"
+             (is (= ":donut.system.validation/invalid"
                     (-> e ex-data :message)))
              (reset! thrown? true)))
+      (is @thrown?)
       ;; satisfy spec
       (ds/start system {[:group-a :component-a ::ds/config] 10}))))
