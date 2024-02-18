@@ -726,10 +726,11 @@
       ;; let donut.system exceptions flow through
       throwable
       (ex-info (str "Error on " computation-stage " when applying signal")
-               {:component-id   (vec (take 2 computation-stage))
-                :signal-handler (last computation-stage)
-                ::system        system
-                :message        message}
+               (with-meta
+                 {:component-id   (vec (take 2 computation-stage))
+                  :signal-handler (last computation-stage)
+                  :message        message}
+                 {::system system})
                throwable))))
 
 (defn- apply-signal-stage
@@ -912,7 +913,7 @@
   "Will attempt to stop a system that threw an exception when starting"
   ([] (stop-failed-system *e))
   ([e]
-   (when-let [system (and e (::system (ex-data e)))]
+   (when-let [system (and e (::system (meta (ex-data e))))]
      (stop system))))
 
 ;;---
