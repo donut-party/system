@@ -11,6 +11,7 @@
            (de/schema-explain-body explanation printer)
            [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
            [(de/-block "Config path" (v/-visit config-path printer) printer)]
+           (ds/signal-meta-block data printer)
            (de/donut-footer data printer))})
 
 (defmethod v/-format ::invalid-instance [_ {:keys [schema-path explanation] :as data} printer]
@@ -18,6 +19,7 @@
    :body  (de/build-group
            (de/schema-explain-body explanation printer)
            [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
+           (ds/signal-meta-block data printer)
            (de/donut-footer data printer))})
 
 (defn validate-config
@@ -26,10 +28,11 @@
     (de/validate!
      config-schema
      config
-     {::de/id      ::invalid-component-config
-      ::de/url     (de/url ::invalid-component-config)
-      :schema-path (into [::ds/defs] (conj component-id ::ds/config-schema))
-      :config-path (into [::ds/defs] (conj component-id ::ds/config))})))
+     {::de/id          ::invalid-component-config
+      ::de/url         (de/url ::invalid-component-config)
+      ::ds/signal-meta {:component-id component-id}
+      :schema-path     (into [::ds/defs] (conj component-id ::ds/config-schema))
+      :config-path     (into [::ds/defs] (conj component-id ::ds/config))})))
 
 (defn validate-instance
   [{:keys [::ds/instance ::ds/instance-schema ::ds/component-id]}]
@@ -37,9 +40,10 @@
     (de/validate!
      instance-schema
      instance
-     {::de/id      ::invalid-instance
-      ::de/url     (de/url ::invalid-instance)
-      :schema-path (into [::ds/defs] (conj component-id ::ds/instance-schema))})))
+     {::de/id          ::invalid-instance
+      ::de/url         (de/url ::invalid-instance)
+      ::ds/signal-meta {:component-id component-id}
+      :schema-path     (into [::ds/defs] (conj component-id ::ds/instance-schema))})))
 
 (def validation-plugin
   #::dsp{:name

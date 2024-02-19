@@ -3,14 +3,35 @@
   (:require
    [clojure.walk :as walk]
    [clojure.zip :as zip]
+   [donut.error :as de]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
+   [malli.dev.virhe :as v]
    [malli.error :as me]))
 
 (declare with-*system*)
+
+
+;;---
+;; error reporting
+;;---
+
+(defn signal-meta-block
+  "include "
+  [{:keys [::signal-meta]} printer]
+  (when signal-meta
+    [(de/-block "donut.system signal handling metadata" (v/-visit signal-meta printer) printer)]))
+
+(defmethod v/-format ::apply-signal-exception
+  [_ {:keys [message] :as data} printer]
+  {:title "Error Applying Signal for Component"
+   :body  (de/build-group
+           [(de/-block "Exception message" message printer)]
+           (signal-meta-block data printer)
+           (de/donut-footer data printer))})
 
 ;;---
 ;; helpers
@@ -725,13 +746,17 @@
     (if (re-find #"^:donut.system" message)
       ;; let donut.system exceptions flow through
       throwable
-      (ex-info (str "Error on " computation-stage " when applying signal")
-               (with-meta
-                 {:component-id   (vec (take 2 computation-stage))
-                  :signal-handler (last computation-stage)
-                  :message        message}
-                 {::system system})
-               throwable))))
+      (let [ei (ex-info (str "Error on " computation-stage " when applying signal")
+                        (with-meta
+                          {::de/id       ::apply-signal-exception
+                           ::de/url      (de/url ::apply-signal-exception)
+                           ::signal-meta {:component-id (vec (take 2 computation-stage))
+                                          :signal-name  (last computation-stage)}
+                           :message      message}
+                          {::system system})
+                        throwable)]
+        (tap> ei)
+        ei))))
 
 (defn- apply-signal-stage
   [system computation-stage-node]
