@@ -9,29 +9,9 @@
    [loom.derived :as ld]
    [loom.graph :as lg]
    [malli.core :as m]
-   [malli.dev.virhe :as v]
    [malli.error :as me]))
 
 (declare with-*system*)
-
-
-;;---
-;; error reporting
-;;---
-
-(defn signal-meta-block
-  "include "
-  [{:keys [::signal-meta]} printer]
-  (when signal-meta
-    [(de/-block "donut.system signal handling metadata" (v/-visit signal-meta printer) printer)]))
-
-(defmethod v/-format ::apply-signal-exception
-  [_ {:keys [message] :as data} printer]
-  {:title "Error Applying Signal for Component"
-   :body  (de/build-group
-           [(de/-block "Exception message" message printer)]
-           (signal-meta-block data printer)
-           (de/donut-footer data printer))})
 
 ;;---
 ;; helpers
@@ -732,11 +712,14 @@
   a) keep track of the current component
   b) resolve all refs for that component
   c) track the updated component def which has refs resolved"
-  [system component-id]
-  (-> system
-      (assoc ::component-id component-id
-             ::component-def (get-in system (into [::defs] component-id)))
-      (resolve-refs component-id)))
+  [system computation-stage-node]
+  (let [component-id (vec (take 2 computation-stage-node))
+        stage        (last computation-stage-node)]
+    (-> system
+        (assoc ::component-id component-id
+               ::component-def (get-in system (into [::defs] component-id))
+               ::handler-name stage)
+        (resolve-refs component-id))))
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
@@ -748,11 +731,11 @@
       throwable
       (let [ei (ex-info (str "Error on " computation-stage " when applying signal")
                         (with-meta
-                          {::de/id       ::apply-signal-exception
-                           ::de/url      (de/url ::apply-signal-exception)
-                           ::signal-meta {:component-id (vec (take 2 computation-stage))
-                                          :signal-name  (last computation-stage)}
-                           :message      message}
+                          {:donut.error/id  ::apply-signal-exception
+                           :donut.error/url (str "https://donut.party/errors/#" ::apply-signal-exception)
+                           ::signal-meta    {:component-id (vec (take 2 computation-stage))
+                                             :stage        (last computation-stage)}
+                           :message         message}
                           {::system system})
                         throwable)]
         (tap> ei)
@@ -761,7 +744,7 @@
 (defn- apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
-        prepped-system (prep-system-for-apply-signal-stage system component-id)
+        prepped-system (prep-system-for-apply-signal-stage system computation-stage-node)
         new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
                               (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
                                   (assoc-component-meta component-id)))
