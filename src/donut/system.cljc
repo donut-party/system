@@ -78,7 +78,7 @@
 
 
 ;;---
-;;; specs
+;;; schemas
 ;;---
 
 (def default-signals
@@ -177,7 +177,7 @@
 (def system? (m/validator DonutSystem))
 
 (def DeepRefPathKey
-  [:or keyword? string? symbol?])
+  [:or keyword? string? symbol? nat-int?])
 
 (def LocalRefKey
   [:and
