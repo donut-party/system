@@ -22,8 +22,8 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= ":donut.error/schema-validation-error"
-                    (-> e ex-data :message)))
+             (is (= ":donut.system.validation/invalid-component-config"
+                    (ex-message e)))
              (reset! thrown? true)))
       (is @thrown?)
       ;; satisfy spec
@@ -45,8 +45,8 @@
            (catch #?(:clj clojure.lang.ExceptionInfo
                      :cljs js/Object)
                e
-             (is (= :donut.system.validation/invalid-instance
-                    (-> e ex-data :message)))
+             (is (= ":donut.system.validation/invalid-instance"
+                    (ex-message e)))
              (reset! thrown? true)))
       (is @thrown?)
       ;; satisfy spec

@@ -5,19 +5,19 @@
    [donut.system.plugin :as dsp]
    [malli.dev.virhe :as v]))
 
-(defmethod v/-format ::invalid-component-config [_ {:keys [schema-path explanation] :as data} printer]
+(defmethod v/-format ::invalid-component-config [_ {:keys [schema-path config-path explanation] :as data} printer]
   {:title "Component Config Validation Error"
    :body  (de/build-group
            (de/schema-explain-body explanation printer)
            [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
+           [(de/-block "Config path" (v/-visit config-path printer) printer)]
            (de/donut-footer data printer))})
 
-(defmethod v/-format ::invalid-instance [_ {:keys [schema-path config-path explanation] :as data} printer]
+(defmethod v/-format ::invalid-instance [_ {:keys [schema-path explanation] :as data} printer]
   {:title "Component Instance Validation Error"
    :body  (de/build-group
            (de/schema-explain-body explanation printer)
            [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
-           [(de/-block "config path" (v/-visit config-path printer) printer)]
            (de/donut-footer data printer))})
 
 (defn validate-config
@@ -39,7 +39,7 @@
      instance
      {::de/id      ::invalid-instance
       ::de/url     (de/url ::invalid-instance)
-      :schema-path (into [::ds/defs] (conj component-id ::ds/config-schema))})))
+      :schema-path (into [::ds/defs] (conj component-id ::ds/instance-schema))})))
 
 (def validation-plugin
   #::dsp{:name
