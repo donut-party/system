@@ -3,7 +3,6 @@
   (:require
    [clojure.walk :as walk]
    [clojure.zip :as zip]
-   [donut.error :as de]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
