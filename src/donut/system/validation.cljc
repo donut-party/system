@@ -1,5 +1,6 @@
 (ns donut.system.validation
   (:require
+   [donut.error :as de]
    [donut.system :as ds]
    [donut.system.plugin :as dsp]
    [malli.core :as m]
@@ -7,7 +8,7 @@
    [malli.error :as me]))
 
 (defn- common-format-body
-  [{:keys [explanation schema-path value-path]} printer]
+  [{:keys [explanation schema-path]} printer]
   [:group
    (v/-block "Value" (v/-visit (me/error-value explanation printer) printer) printer) :break :break
    (v/-block "Errors" (v/-visit (me/humanize (me/with-spell-checking explanation)) printer) printer) :break :break
@@ -26,6 +27,7 @@
 
 (defn validate
   [{:keys [type schema value] :as data}]
+
   (when-let [explanation (and schema (m/explain schema value))]
     (m/-fail! type
               (-> (dissoc data :type :schema :value)
@@ -33,18 +35,16 @@
 
 (defn validate-config
   [{:keys [::ds/config-schema ::ds/config ::ds/component-id] :as _component-def}]
-  (validate {:type        ::invalid-component-config
-             :schema      config-schema
-             :schema-path (into [::ds/defs] (conj component-id ::ds/config-schema))
-             :value       config
-             :value-path  (into [::ds/defs] (conj component-id ::ds/config))}))
+  (when config-schema
+    (de/validate! config-schema config
+      {:schema-path (into [::ds/defs] (conj component-id ::ds/config-schema))
+       :value-path  (into [::ds/defs] (conj component-id ::ds/config))})))
 
 (defn validate-instance
   [{:keys [::ds/instance ::ds/instance-schema ::ds/component-id]}]
-  (validate {:type        ::invalid-instance
-             :schema      instance-schema
-             :schema-path (into [::ds/defs] (conj component-id ::ds/instance-schema))
-             :value       instance}))
+  (when instance-schema
+    (de/validate! instance-schema instance
+      {:schema-path (into [::ds/defs] (conj component-id ::ds/config-schema))})))
 
 (def validation-plugin
   #::dsp{:name
