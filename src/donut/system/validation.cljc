@@ -2,26 +2,7 @@
   (:require
    [donut.error :as de]
    [donut.system :as ds]
-   [donut.system.dev :as dev]
-   [donut.system.plugin :as dsp]
-   [malli.dev.virhe :as v]))
-
-(defmethod v/-format ::invalid-component-config [_ {:keys [schema-path config-path explanation] :as data} printer]
-  {:title "Component Config Validation Error"
-   :body  (de/build-group
-           (de/schema-explain-body explanation printer)
-           [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
-           [(de/-block "Config path" (v/-visit config-path printer) printer)]
-           (dev/signal-meta-block data printer)
-           (de/donut-footer data printer))})
-
-(defmethod v/-format ::invalid-instance [_ {:keys [schema-path explanation] :as data} printer]
-  {:title "Component Instance Validation Error"
-   :body  (de/build-group
-           (de/schema-explain-body explanation printer)
-           [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
-           (dev/signal-meta-block data printer)
-           (de/donut-footer data printer))})
+   [donut.system.plugin :as dsp]))
 
 (defn signal-meta
   [{:keys [::ds/component-id ::ds/system]}]

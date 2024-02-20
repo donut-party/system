@@ -3,7 +3,7 @@
          metosin/malli               {:mvn/version "0.14.0"}
          org.clojure/clojure         {:mvn/version "1.10.3"}
          org.clojure/tools.namespace {:mvn/version "1.3.0"}
-         party.donut/error           {:mvn/version "0.0.11"}}
+         party.donut/error           {:mvn/version "0.0.16"}}
 
  :aliases
  {:dev
