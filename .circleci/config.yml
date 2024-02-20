@@ -27,6 +27,7 @@ jobs:
             - ./
   deploy:
     docker:
+      # - image: cimg/clojure:1.11.1-openjdk-8.0-node # TODO
       - image: circleci/clojure:openjdk-8-tools-deps-buster-node
     steps:
       - checkout

@@ -6,41 +6,48 @@
    [donut.system.validation :as dsv]
    [malli.core :as m]))
 
-(deftest component-def-schema-validation-test
-  (testing "use ::ds/pre-start-schema to validate entire component def"
+(deftest config-schema-validation-test
+  (testing "use ::ds/instance-schema to validate instance returned by ::ds/start"
     (let [system #::ds{:defs
                        {:group-a
                         {:component-a
-                         #::ds{:start (fn [_] 1)
-                               :config {}
-                               :pre-start-schema [:map [::ds/config map?]]}}}
+                         #::ds{:start         1
+                               :config        {}
+                               :config-schema (m/schema int?)}}}
+
                        :plugins
-                       [dsv/validation-plugin]}]
-      (is (= {::ds/config ["should be a map"]}
-             (-> (ds/start system {[:group-a :component-a ::ds/config] "not a map"})
-                 ::ds/out
-                 :validation
-                 :group-a
-                 :component-a
-                 :spec-explain-human)))
-      (is (nil? (::ds/out (ds/start system)))))))
+                       [dsv/validation-plugin]}
+          thrown? (atom false)]
+      (try (ds/start system)
+           (catch #?(:clj clojure.lang.ExceptionInfo
+                     :cljs js/Object)
+               e
+             (is (= ":donut.system.validation/invalid-component-config"
+                    (ex-message e)))
+             (reset! thrown? true)))
+      (is @thrown?)
+      ;; satisfy spec
+      (ds/start system {[:group-a :component-a ::ds/config] 10}))))
 
 (deftest instance-schema-validation-test
   (testing "use ::ds/instance-schema to validate instance returned by ::ds/start"
     (let [system #::ds{:defs
                        {:group-a
                         {:component-a
-                         #::ds{:start 1
-                               :config {}
+                         #::ds{:start           1
+                               :config          {}
                                :instance-schema (m/schema int?)}}}
 
                        :plugins
-                       [dsv/validation-plugin]}]
-      (is (= ["should be an int"]
-             (-> (ds/start system {[:group-a :component-a ::ds/start] "not an int"})
-                 ::ds/out
-                 :validation
-                 :group-a
-                 :component-a
-                 :spec-explain-human)))
-      (is (nil? (::ds/out (ds/start system)))))))
+                       [dsv/validation-plugin]}
+          thrown? (atom false)]
+      (try (ds/start system {[:group-a :component-a ::ds/start] "not an int"})
+           (catch #?(:clj clojure.lang.ExceptionInfo
+                     :cljs js/Object)
+               e
+             (is (= ":donut.system.validation/invalid-instance"
+                    (ex-message e)))
+             (reset! thrown? true)))
+      (is @thrown?)
+      ;; satisfy spec
+      (ds/start system))))

@@ -1,13 +1,15 @@
 {:paths ["src" "resources"]
- :deps  {org.clojure/clojure         {:mvn/version "1.10.3"}
+ :deps  {aysylu/loom                 {:mvn/version "1.0.2"}
+         metosin/malli               {:mvn/version "0.14.0"}
+         org.clojure/clojure         {:mvn/version "1.10.3"}
          org.clojure/tools.namespace {:mvn/version "1.3.0"}
-         aysylu/loom                 {:mvn/version "1.0.2"}
-         metosin/malli               {:mvn/version "0.7.5"}}
+         party.donut/error           {:mvn/version "0.0.16"}}
 
  :aliases
  {:dev
-  {:extra-deps  {ring/ring     {:mvn/version "1.9.4"}
-                 djblue/portal {:mvn/version "0.35.1"}}
+  {:extra-deps  {djblue/portal     {:mvn/version "0.35.1"}
+                 party.donut/error {:local/root "../error"}
+                 ring/ring         {:mvn/version "1.9.4"}}
    :extra-paths ["dev" "test"]}
 
   :test

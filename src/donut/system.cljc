@@ -3,6 +3,7 @@
   (:require
    [clojure.walk :as walk]
    [clojure.zip :as zip]
+   [donut.error :as de]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
@@ -52,8 +53,33 @@
   [m configs]
   (assoc-many m [::config] configs))
 
+(defn get-component-facet
+  [system facet [component-group component-name :as component-id]]
+  (or (flat-get-in system [facet component-id])
+      (when-not (contains? (get-in system [::defs component-group])
+                           component-name)
+        (throw (ex-info (str "Component not defined for " facet)
+                        {:component-id component-id})))))
+
+(defn instance
+  "Get a specific component instance. With no arguments returns set of all
+  component names."
+  ([system]
+   (into {}
+         (for [[k m] (::instances system)]
+           [k (set (keys m))])))
+  ([system component-id]
+   (get-component-facet system ::instances component-id)))
+
+(defn component-meta
+  "Get a specific component's system meta. With no arguments returns set of all
+  component names."
+  [system component-id]
+  (flat-get-in system [::component-meta component-id]))
+
+
 ;;---
-;;; specs
+;;; schemas
 ;;---
 
 (def default-signals
@@ -144,7 +170,7 @@
    [::resolved-defs {:optional true} ComponentGroups]
    [::graphs {:optional true} OrderGraphs]
    [::instances {:optional true} ComponentGroups]
-   [::out {:optional true} ComponentGroups]
+   [::component-meta {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
    [::selected-component-ids {:optional true} [:set ComponentSelection]]
    [::plugins {:optional true} [:vector Plugin]]])
@@ -152,7 +178,7 @@
 (def system? (m/validator DonutSystem))
 
 (def DeepRefPathKey
-  [:or keyword? string? symbol?])
+  [:or keyword? string? symbol? nat-int?])
 
 (def LocalRefKey
   [:and
@@ -190,10 +216,7 @@
 (def ref-type (fn [v] (when (seqable? v) (first v))))
 
 (defn- ensure-valid-ref [ref]
-  (when-let [explanation (m/explain DonutRef ref)]
-    (throw (ex-info (str "Invalid ref: " (pr-str ref))
-                    {:spec-explain-human (me/humanize explanation)
-                     :spec-explain       explanation})))
+  (de/validate! DonutRef ref (str "Invalid ref:" (pr-str ref)))
   ref)
 
 (defn ref [k] (ensure-valid-ref [::ref k]))
@@ -342,7 +365,8 @@
        :else (into (empty p) xs)))
    m))
 
-(defn- resolve-component-refs [system component-def component-id]
+(defn- resolve-component-refs
+  [system component-def component-id]
   (let [zipper (map-vec-zipper component-def)]
     (zip-walk (fn [loc]
                 (let [node (zip/node loc)
@@ -366,10 +390,10 @@
 (defn- default-resolve-refs
   [system component-id]
   (-> system
-      (flat-assoc-in [::resolved-defs component-id] (flat-get-in system [::defs component-id]))
-      (update-in
-       (into [::resolved-defs] component-id)
-       #(resolve-component-refs system % component-id))))
+      (flat-assoc-in [::resolved-defs component-id]
+                     (flat-get-in system [::defs component-id]))
+      (update-in (into [::resolved-defs] component-id)
+                 #(resolve-component-refs system % component-id))))
 
 ;; end ref resolution zipping
 
@@ -418,34 +442,35 @@
   (reduce (fn [expanded-system component-id]
             (let [component-path (into [::defs] component-id)]
               ;; skip subsystem components
-              (if (::subystem (get-in expanded-system component-path))
-                expanded-system
-                (update-in expanded-system
-                           component-path
-                           (fn [component-def]
-                             (if (seqable? component-def)
-                               (walk/postwalk (fn [x]
-                                                (let [rt (ref-type x)]
-                                                  (cond
-                                                    (group-ref? x)
-                                                    (let [group-name (first (ref-key x))]
-                                                      {group-name
-                                                       (->> (get-in system [::defs group-name])
-                                                            keys
-                                                            (reduce (fn [group-map k]
-                                                                      (assoc group-map k (ref [group-name k])))
-                                                                    {}))})
+              (update-in expanded-system
+                         component-path
+                         (fn [component-def]
+                           (if (seqable? component-def)
+                             (walk/postwalk (fn [x]
+                                              (let [rt (ref-type x)]
+                                                (cond
+                                                  (-> x meta :subsystem?)
+                                                  x
 
-                                                    (= ::local-ref rt)
-                                                    (ref (into [(first component-id)] (ref-key x)))
+                                                  (group-ref? x)
+                                                  (let [group-name (first (ref-key x))]
+                                                    {group-name
+                                                     (->> (get-in system [::defs group-name])
+                                                          keys
+                                                          (reduce (fn [group-map k]
+                                                                    (assoc group-map k (ref [group-name k])))
+                                                                  {}))})
 
-                                                    (= ::ref rt)
-                                                    x
+                                                  (= ::local-ref rt)
+                                                  (ref (into [(first component-id)] (ref-key x)))
 
-                                                    :else
-                                                    x)))
-                                              component-def)
-                               component-def))))))
+                                                  (= ::ref rt)
+                                                  x
+
+                                                  :else
+                                                  x)))
+                                            component-def)
+                             component-def)))))
           system
           (component-ids system)))
 
@@ -458,14 +483,15 @@
                        (when (ref? x)
                          (swap! refs conj x))
                        x)
-                     component-def)
+                     (cond-> component-def
+                       (map? component-def) (dissoc ::subsystem)))
       @refs)))
 
 (defn- ref-edges
   "used to populate the component graph with directed edges"
   [system direction]
   (let [expanded-system (expand-refs-for-graph system)
-        defs (::defs expanded-system)]
+        defs            (::defs expanded-system)]
     (->>
      ;; collect all component refs for all components
      (for [k1  (keys defs)
@@ -484,8 +510,7 @@
 (defn- component-graph-add-edges
   "uses refs to build a dependency map for components"
   [graph system direction]
-  (reduce (fn [graph edge]
-            (lg/add-edges graph edge))
+  (reduce lg/add-edges
           graph
           (ref-edges system direction)))
 
@@ -517,26 +542,6 @@
         (assoc-in [::graphs :reverse-topsort] reversed))))
 
 ;;---
-;;; channel fns
-;;---
-
-(defn- channel-fn
-  [system channel component-id]
-  (fn ->channel
-    ([v]
-     (->channel system v))
-    ([s v]
-     (assoc-in s (into channel component-id) v))))
-
-(defn- channel-fns
-  [system component-id]
-  {:->info       (channel-fn system [::out :info] component-id)
-   :->error      (channel-fn system [::out :error] component-id)
-   :->warn       (channel-fn system [::out :warn] component-id)
-   :->validation (channel-fn system [::out :validation] component-id)
-   :->instance   (channel-fn system [::instances] component-id)})
-
-;;---
 ;;; computation graph
 ;;---
 ;;
@@ -560,9 +565,9 @@
   "creates the graph that should be traversed to call handler (and lifecycle) fns
   for the given signal"
   [system signal order]
-  (let [component-graph        (get-in system [::graphs order])
+  (let [component-graph    (get-in system [::graphs order])
         {:keys [pre post]} (handler-lifecycle-names signal)
-        sorted-graph (la/topsort component-graph)]
+        sorted-graph       (la/topsort component-graph)]
     (when-not sorted-graph
       (throw (ex-info "Cycle detected" {})))
     (reduce (fn [computation-graph component-node]
@@ -595,23 +600,22 @@
   [stage]
   (not (re-find #"(^pre-|^post-)" (name stage))))
 
+(def ^:dynamic *component-meta*)
+
+(defn- assoc-component-meta
+  [system component-id]
+  (flat-assoc-in system [::component-meta component-id] @*component-meta*))
+
 (defn- apply-stage-fn
   [system stage-fn component-id]
   (let [resolved-def (flat-get-in system [::resolved-defs component-id])]
     (stage-fn
      ;; construct map to pass to the `stage-fn`
-     (cond-> {::instance     (flat-get-in system [::instances component-id])
-              ::system       system
-              ::component-id component-id}
-       (map? resolved-def) (merge resolved-def)
-       true                (merge (channel-fns system component-id))))))
-
-(defn- stage-result-valid?
-  [system]
-  (-> system
-      ::out
-      (select-keys [:error :validation])
-      empty?))
+     (cond-> {::instance       (flat-get-in system [::instances component-id])
+              ::system         system
+              ::component-id   component-id
+              ::component-meta *component-meta*}
+       (map? resolved-def) (merge resolved-def)))))
 
 ;; copied from loom.graph to work around its bizarre cljs (:in g) issue
 (defn- remove-adj-nodes [m nodes adjacents remove-fn]
@@ -632,18 +636,6 @@
         (assoc :adj (remove-adj-nodes (:adj g) nodes ins disj))
         (assoc :in (remove-adj-nodes (:in g) nodes outs disj)))))
 
-(defn- prune-signal-computation-graph
-  "remove subgraph reachable from computation-stage-node to prevent those
-  handlers/lifecycles from being applied"
-  [system computation-stage-node]
-  (update system
-          ::signal-computation-graph
-          (fn [graph]
-            (->> computation-stage-node
-                 (ld/subgraph-reachable-from graph)
-                 (lg/nodes)
-                 (remove-nodes graph)))))
-
 (defn- remove-signal-computation-stage-node
   [system computation-stage-node]
   (update system
@@ -657,10 +649,15 @@
         stage-fn     (or (flat-get-in system [::resolved-defs computation-stage-node])
                          system-identity)]
     (fn [system]
-      (let [stage-result (apply-stage-fn system stage-fn component-id)]
-        (if (system? stage-result)
-          stage-result
-          system)))))
+      (cond->> stage-fn
+        (map? stage-fn) vals
+        (fn? stage-fn)  vector
+        true            (reduce (fn lifecycle-fns [system lifecycle-fn]
+                                  (let [stage-result (apply-stage-fn system lifecycle-fn component-id)]
+                                    (if (system? stage-result)
+                                      stage-result
+                                      system)))
+                                system)))))
 
 (defn- handler-stage-fn
   "returns function for a handler (e.g. ::start) as opposed to a lifecycle
@@ -712,37 +709,48 @@
   a) keep track of the current component
   b) resolve all refs for that component
   c) track the updated component def which has refs resolved"
-  [system component-id]
-  (let [part-prepped (-> system
-                         (assoc ::component-id component-id
-                                ::component-def (get-in system (into [::defs] component-id)))
-                         (resolve-refs component-id))]
-    (assoc part-prepped ::current-resolved-component (resolved part-prepped))))
+  [system computation-stage-node]
+  (let [component-id (vec (take 2 computation-stage-node))
+        stage        (last computation-stage-node)]
+    (-> system
+        (assoc ::component-id component-id
+               ::component-def (get-in system (into [::defs] component-id))
+               ::handler-name stage)
+        (resolve-refs component-id))))
 
 (defn- apply-signal-exception
   "provide a more specific exception for signal application to help narrow down the source of the exception"
-  [system computation-stage t]
-  (ex-info (str "Error on " computation-stage " when applying signal")
-           {:component      (vec (take 2 computation-stage))
-            :signal-handler (last computation-stage)
-            :message        #?(:clj (.getMessage t)
-                               :cljs (. t -message))
-            ::system        system}
-           t))
+  [system computation-stage throwable]
+  (let [message #?(:clj (.getMessage throwable)
+                   :cljs (. throwable -message))]
+    (if (re-find #"^:donut.system" message)
+      ;; let donut.system exceptions flow through
+      throwable
+      (let [ei (ex-info (str "Error on " computation-stage " when applying signal")
+                        (with-meta
+                          {:donut.error/id  ::apply-signal-exception
+                           :donut.error/url (str "https://donut.party/errors/#" ::apply-signal-exception)
+                           ::signal-meta    {:component-id (vec (take 2 computation-stage))
+                                             :stage        (last computation-stage)}
+                           :message         message}
+                          {::system system})
+                        throwable)]
+        (tap> ei)
+        ei))))
 
 (defn- apply-signal-stage
   [system computation-stage-node]
   (let [component-id   (vec (take 2 computation-stage-node))
-        prepped-system (prep-system-for-apply-signal-stage system component-id)
-        new-system     (try ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
+        prepped-system (prep-system-for-apply-signal-stage system computation-stage-node)
+        new-system     (try (binding [*component-meta* (atom (component-meta system component-id))]
+                              (-> ((computation-stage-fn prepped-system computation-stage-node) prepped-system)
+                                  (assoc-component-meta component-id)))
                             (catch #?(:clj Throwable
                                       :cljs :default) t
                               (throw (apply-signal-exception prepped-system
                                                              computation-stage-node
                                                              t))))]
-    (if (stage-result-valid? new-system)
-      (remove-signal-computation-stage-node new-system computation-stage-node)
-      (prune-signal-computation-graph new-system computation-stage-node))))
+    (remove-signal-computation-stage-node new-system computation-stage-node)))
 
 (defn- apply-signal-computation-graph
   [system]
@@ -785,11 +793,10 @@
 
 (defn signal
   [system signal-name]
-  (when-let [explanation (m/explain DonutSystem system)]
-    (throw (ex-info "Invalid system"
-                    {:reason             :system-spec-validation-error
-                     :spec-explain-human (me/humanize explanation)
-                     :spec-explain       explanation})))
+  (de/validate! DonutSystem
+                system
+                {::de/id ::invalid-system
+                 ::de/url (de/url ::invalid-system)})
 
   (let [inited-system (init-system system signal-name)]
     (when-let [explanation (m/explain (into [:enum] (->> inited-system ::signals keys))
@@ -834,40 +841,19 @@
                  (fn [system]
                    (merge-imports system parent-system)))))
 
-(defn- forward-channel
-  "used to make all channel 'output' available at the top level"
-  [parent-system channel component-id]
-  (if-let [chan-val (flat-get-in parent-system [::instances component-id channel])]
-    (assoc-in parent-system
-              (into channel component-id)
-              chan-val)
-    parent-system))
-
-(defn- forward-channels
-  [{:keys [::component-id] :as parent-system}]
-  (-> parent-system
-      (forward-channel [::out :info] component-id)
-      (forward-channel [::out :error] component-id)
-      (forward-channel [::out :warn] component-id)
-      (forward-channel [::out :validation] component-id)))
-
 (defn- forward-start-signal
   [signal-name]
-  (fn [{:keys [->instance ::system]}]
-    (-> system
-        ::current-resolved-component
-        ::subsystem
-        (signal signal-name)
-        ->instance
-        forward-channels)))
+  (fn [{:keys [::subsystem ::system ::component-id]}]
+    (assoc-in system
+              (into [::instances] component-id)
+              (signal subsystem signal-name))))
 
 (defn- forward-signal
   [signal-name]
-  (fn [{:keys [::instance ->instance]}]
-    (-> instance
-        (signal signal-name)
-        ->instance
-        forward-channels)))
+  (fn [{:keys [::instance ::system ::component-id]}]
+    (assoc-in system
+              (into [::instances] component-id)
+              (signal instance signal-name))))
 
 (defn subsystem-component
   "Decorates a subsystem so that it can respond to signals when embedded in a
@@ -877,7 +863,10 @@
    ::mk-signal-handler forward-signal
    ::resolve-refs      subsystem-resolver
    ::imports           (mapify-imports imports)
-   ::subsystem         (-> subsystem expand-refs-for-graph)})
+   ;; TODO try removing expand-refs-graph
+   ::subsystem         (-> subsystem
+                           expand-refs-for-graph
+                           (with-meta {:subsystem? true}))})
 
 (defn alias-component
   "creates a component that just provides an instance defined elsewhere in the system"
@@ -928,7 +917,7 @@
   "Will attempt to stop a system that threw an exception when starting"
   ([] (stop-failed-system *e))
   ([e]
-   (when-let [system (and e (::system (ex-data e)))]
+   (when-let [system (and e (::system (meta (ex-data e))))]
      (stop system))))
 
 ;;---
@@ -941,19 +930,6 @@
   {::start (fn [{:keys [::system]}]
              (throw (ex-info "Need to define required component"
                              {:component-id (::component-id system)})))})
-
-(defn instance
-  "Get a specific component instance. With no arguments returns set of all
-  component names."
-  ([system]
-   (into {}
-         (for [[k m] (::instances system)]
-           [k (set (keys m))])))
-  ([system [component-group component-name :as component-id]]
-   (or (flat-get-in system [::instances  component-id])
-       (when-not (contains? (get-in system [::defs component-group])
-                            component-name)
-         (throw (ex-info "Component not defined" {:component-id component-id}))))))
 
 (defn component-doc
   [system component-id]
