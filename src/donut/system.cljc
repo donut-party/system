@@ -3,6 +3,7 @@
   (:require
    [clojure.walk :as walk]
    [clojure.zip :as zip]
+   [donut.error :as de]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
    [loom.derived :as ld]
@@ -215,10 +216,7 @@
 (def ref-type (fn [v] (when (seqable? v) (first v))))
 
 (defn- ensure-valid-ref [ref]
-  (when-let [explanation (m/explain DonutRef ref)]
-    (throw (ex-info (str "Invalid ref: " (pr-str ref))
-                    {:spec-explain-human (me/humanize explanation)
-                     :spec-explain       explanation})))
+  (de/validate! DonutRef ref (str "Invalid ref:" (pr-str ref)))
   ref)
 
 (defn ref [k] (ensure-valid-ref [::ref k]))
@@ -795,11 +793,10 @@
 
 (defn signal
   [system signal-name]
-  (when-let [explanation (m/explain DonutSystem system)]
-    (throw (ex-info "Invalid system"
-                    {:reason             :system-spec-validation-error
-                     :spec-explain-human (me/humanize explanation)
-                     :spec-explain       explanation})))
+  (de/validate! DonutSystem
+                system
+                {::de/id ::invalid-system
+                 ::de/url (de/url ::invalid-system)})
 
   (let [inited-system (init-system system signal-name)]
     (when-let [explanation (m/explain (into [:enum] (->> inited-system ::signals keys))

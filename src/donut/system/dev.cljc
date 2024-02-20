@@ -1,7 +1,7 @@
 (ns donut.system.dev
   (:require
-   [donut.error :as de]
    [donut.error.dev :as ded]
+   [donut.system :as ds]
    [donut.system.validation :as dsv]
    [malli.dev.virhe :as v]))
 
@@ -14,27 +14,34 @@
   (when signal-meta
     [(ded/-block "donut.system signal handling metadata" (v/-visit signal-meta printer) printer)]))
 
-(defmethod v/-format ::apply-signal-exception
+(defmethod v/-format ::ds/apply-signal-exception
   [_ {:keys [message] :as data} printer]
   {:title "Error Applying Signal for Component"
-   :body  (de/build-group
-           [(de/-block "Exception message" message printer)]
+   :body  (ded/build-group
+           [(ded/-block "Exception message" message printer)]
            (signal-meta-block data printer)
-           (de/donut-footer data printer))})
+           (ded/donut-footer data printer))})
+
+(defmethod v/-format ::ds/invalid-system
+  [_ {:keys [explanation] :as data} printer]
+  {:title "System doesn't match schema"
+   :body  (ded/build-group
+           (ded/schema-explain-body explanation printer)
+           (ded/donut-footer data printer))})
 
 (defmethod v/-format ::dsv/invalid-component-config [_ {:keys [schema-path config-path explanation] :as data} printer]
   {:title "Component Config Validation Error"
-   :body  (de/build-group
-           (de/schema-explain-body explanation printer)
-           [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
-           [(de/-block "Config path" (v/-visit config-path printer) printer)]
+   :body  (ded/build-group
+           (ded/schema-explain-body explanation printer)
+           [(ded/-block "Schema path" (v/-visit schema-path printer) printer)]
+           [(ded/-block "Config path" (v/-visit config-path printer) printer)]
            (signal-meta-block data printer)
-           (de/donut-footer data printer))})
+           (ded/donut-footer data printer))})
 
 (defmethod v/-format ::dsv/invalid-instance [_ {:keys [schema-path explanation] :as data} printer]
   {:title "Component Instance Validation Error"
-   :body  (de/build-group
-           (de/schema-explain-body explanation printer)
-           [(de/-block "Schema path" (v/-visit schema-path printer) printer)]
+   :body  (ded/build-group
+           (ded/schema-explain-body explanation printer)
+           [(ded/-block "Schema path" (v/-visit schema-path printer) printer)]
            (signal-meta-block data printer)
-           (de/donut-footer data printer))})
+           (ded/donut-footer data printer))})
