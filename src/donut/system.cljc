@@ -918,7 +918,9 @@
   ([] (stop-failed-system *e))
   ([e]
    (when-let [system (and e (::system (meta (ex-data e))))]
-     (stop system))))
+     (-> system
+         (select-components (component-ids system ::instances))
+         stop))))
 
 ;;---
 ;;; component helpers
