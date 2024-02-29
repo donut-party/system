@@ -917,10 +917,12 @@
   "Will attempt to stop a system that threw an exception when starting"
   ([] (stop-failed-system *e))
   ([e]
-   (when-let [system (and e (::system (meta (ex-data e))))]
-     (-> system
-         (select-components (component-ids system ::instances))
-         stop))))
+   (let [system (and e (::system (meta (ex-data e))))
+         ids    (seq (component-ids system ::instances))]
+     (when (and system (seq ids))
+       (-> system
+           (select-components (component-ids system ::instances))
+           stop)))))
 
 ;;---
 ;;; component helpers

@@ -586,42 +586,44 @@
 
 (deftest stop-failed-system-test
   #?(:clj
-     ;; I cannot for the life of me figure out why this doesn't work with cljs
-     ;; for whatever reason the try/catch around (start ~system) in
-     ;; with-*system* doesn't catch the exception that gets thrown when starting
-     (testing "stops when there's an exception during start"
-       (let [stop-check (atom nil)]
-         (try
-           (ds/with-*system* {::ds/defs {:group-a {:a #::ds{:start (fn [_])
-                                                            :stop (fn [_] (reset! stop-check true))}
-                                                   :b #::ds{:start (fn [_] (throw (ex-info "test" {})))
-                                                            :config {:foo (ds/local-ref [:a])}}}}})
-           (catch #?(:clj Exception :cljs :default) _))
-         (is (= true @stop-check))))
+     (do
+       ;; I cannot for the life of me figure out why this doesn't work with cljs
+       ;; for whatever reason the try/catch around (start ~system) in
+       ;; with-*system* doesn't catch the exception that gets thrown when starting
+       (testing "stops when there's an exception during start"
+         (let [stop-check (atom nil)]
+           (try
+             (ds/with-*system* {::ds/defs {:group-a {:a #::ds{:start (fn [_])
+                                                              :stop (fn [_] (reset! stop-check true))}
+                                                     :b #::ds{:start (fn [_] (throw (ex-info "test" {})))
+                                                              :config {:foo (ds/local-ref [:a])}}}}})
+             (catch Exception e))
+           (is (= true @stop-check))))
 
-     (testing "stops when there are two components"
-       (let [no-second-throw (atom false)]
-         (try
-           (ds/start {::ds/defs {:group {:component-b {::ds/start (fn [_] (throw (RuntimeException. "Error starting component-b")))}
-                                         :component-c {::ds/config {:component-b (ds/local-ref [:component-b])}
-                                                       ::ds/start (fn [_] (println "Starting component-c"))}}}})
-           (catch Exception #?(:clj Exception :cljs :default)
-             (ds/stop-failed-system e)
-             (reset! no-second-throw true)))
-         (is @no-second-throw)))
+       (testing "stops when there are two components"
+         (let [no-second-throw (atom false)]
+           (try
+             (ds/start {::ds/defs {:group {:component-b {::ds/start (fn [_] (throw (RuntimeException. "Error starting component-b")))}
+                                           :component-c {::ds/config {:component-b (ds/local-ref [:component-b])}
+                                                         ::ds/start (fn [_] (println "Starting component-c"))}}}})
+             (catch Exception e
+               (ds/stop-failed-system e)
+               (reset! no-second-throw true)))
+           (is @no-second-throw)))
 
-     (testing "stops when there are three components"
-       (let [no-second-throw (atom false)]
-         (try
-           (ds/start
-            {::ds/defs {:group {:component-a {::ds/start (fn [_] (println "Starting component-a"))}
-                                :component-b {::ds/config {:component-a (ds/local-ref [:component-a])}
-                                              ::ds/start  (fn [_] (throw (RuntimeException. "Error starting component-b")))}
-                                :component-c {::ds/config {:component-b (ds/local-ref [:component-b])}
-                                              ::ds/start  (fn [_] (println "Starting component-c"))}}}})
-           (catch Exception #?(:clj Exception :cljs :default)
-             (ds/stop-failed-system)))
-         (is @no-second-throw))))
+       (testing "stops when there are three components"
+         (let [no-second-throw (atom false)]
+           (try
+             (ds/start
+              {::ds/defs {:group {:component-a {::ds/start (fn [_] (println "Starting component-a"))}
+                                  :component-b {::ds/config {:component-a (ds/local-ref [:component-a])}
+                                                ::ds/start  (fn [_] (throw (RuntimeException. "Error starting component-b")))}
+                                  :component-c {::ds/config {:component-b (ds/local-ref [:component-b])}
+                                                ::ds/start  (fn [_] (println "Starting component-c"))}}}})
+             (catch Exception e
+               (ds/stop-failed-system e)
+               (reset! no-second-throw true)))
+           (is @no-second-throw)))))
 
   (testing "stops when there's an exception in body of with-*system*"
     (let [stop-check (atom nil)]
