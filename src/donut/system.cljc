@@ -1040,7 +1040,8 @@
                                  (fn [component-instance]
                                    (or component-instance
                                        (start signal-args)
-                                       true)))))
+                                       true)))
+                          (get @component-instance-cache cache-key)))
           ::stop      (fn [{:keys [::component-id ::cache-key] :as signal-args}]
                         (let [cache-key (cond-> component-id
                                           cache-key (conj cache-key))]
