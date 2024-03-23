@@ -794,7 +794,8 @@
 
           (seq @promises)
           (do
-            #?(:clj (Thread/sleep 200))
+            #?(:clj (deref (second (first @promises)) 200 nil)
+               :cljs (deref (second (first @promises))))
             (recur system))
 
           (empty? nodes) system
