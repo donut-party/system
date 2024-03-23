@@ -798,7 +798,7 @@
                :cljs (deref (second (first @promises))))
             (recur system))
 
-          (empty? nodes) system
+          (empty? nodes) (dissoc system ::complete)
 
           :else (throw (ex-info "Unexpected state" {:promises @promises})))))))
 
