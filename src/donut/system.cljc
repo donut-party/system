@@ -761,15 +761,18 @@
         system
         (recur (apply-signal-stage system computation-stage-node))))))
 
-(defn- merge-instance [system-a system-b component-id]
+(defn- merge-instance [system-a system-b [group component]]
   (loop [system system-a
          [k & ks] [::component-meta ::defs ::resolved-defs ::instances ::status]] 
-    (if-not k
-      system
-      (let [path (into [k] component-id)]
-        (recur
-         (assoc-in system path (get-in system-b path))
-         ks)))))
+    (cond
+      (not k) system
+
+      (contains? (get-in system-b [k group]) component)
+      (recur
+       (assoc-in system [k group component] (get-in system-b [k group component]))
+       ks)
+      
+      :else (recur system ks))))
 
 (defn- apply-signal-computation-graph-parallel
   [system]
