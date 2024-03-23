@@ -783,7 +783,7 @@
                     real)
             {::keys [complete]} system
             nodes (la/topsort signal-computation-graph)
-            [computation-stage-node] (filter #(set/subset? (lg/predecessors og %) complete) nodes)]
+            computation-stage-node (some #(when (set/subset? (lg/predecessors og %) complete) %) nodes)]
         (swap! promises #(filterv (comp not real) %))
         (cond
           computation-stage-node
