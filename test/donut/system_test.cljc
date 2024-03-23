@@ -5,7 +5,22 @@
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
    [loom.graph :as lg]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  #?(:clj
+     (:import [java.util.concurrent Executors])))
+
+#?(:clj
+   (when (System/getenv "TEST_FORCE_THREAD_POOL")
+     (defonce test-thread-pool (Executors/newFixedThreadPool 8))
+
+     (let [original @#'ds/apply-signal-computation-graph]
+       (alter-var-root
+        #'ds/apply-signal-computation-graph
+        (constantly
+         (fn [system]
+           (-> system
+               (assoc ::ds/execute (ds/execute-fn test-thread-pool))
+               original)))))))
 
 (defn config-port
   [opts]
