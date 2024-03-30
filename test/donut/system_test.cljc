@@ -669,6 +669,22 @@
     (is (= [::ds/pre-start ::ds/start ::ds/post-start]
            (get-in (ds/start system) [::ds/component-meta :group :component])))))
 
+(deftest many-refs-test
+  (testing "A large number of components with interdependent refs are processed correctly"
+    (let [kw #(keyword (str "c" %))
+          component (fn [ref]
+                      {::ds/config ref
+                       ::ds/start
+                       (fn [{::ds/keys [config]}]
+                         (inc config))})
+          system {::ds/defs
+                  {:test
+                   (->> (range 1 128)
+                        (map #(do [(kw %) (component (ds/local-ref [(kw (quot % 2))]))]))
+                        (into {:c0 1}))}}]
+      (is (= {1 1, 2 1, 3 2, 4 4, 5 8, 6 16, 7 32, 8 64}
+             (-> system ds/start ::ds/instances :test vals frequencies))))))
+
 #?(:clj
    (deftest parallel-start-test
      (let [a (promise)
