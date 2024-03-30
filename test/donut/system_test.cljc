@@ -1,6 +1,6 @@
 (ns donut.system-test
   (:require
-   #?(:clj [clojure.test :refer [deftest is testing]]
+   #?(:clj [clojure.test :refer [deftest is testing use-fixtures]]
       :cljs [cljs.test :refer [deftest is testing] :include-macros true])
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
@@ -10,15 +10,27 @@
      (:import [java.util.concurrent Executors])))
 
 #?(:clj
-   (when (System/getenv "TEST_FORCE_THREAD_POOL")
-     (let [original @#'ds/apply-signal-computation-graph]
-       (alter-var-root
-        #'ds/apply-signal-computation-graph
-        (constantly
-         (fn [system]
-           (-> system
-               (assoc ::ds/execute (ds/execute-fn (Executors/newFixedThreadPool 8)))
-               original)))))))
+   (do
+     (defn with-thread-pool [f]
+       (let [thread-pool (Executors/newFixedThreadPool 8)
+             original @#'ds/apply-signal-computation-graph
+             add-exec (fn [system]
+                        (-> system
+                            (assoc ::ds/execute (ds/execute-fn thread-pool))
+                            original))]
+         (alter-var-root
+          #'ds/apply-signal-computation-graph
+          (constantly add-exec))
+         (try
+           (f)
+           (finally
+             (.shutdownNow thread-pool)
+             (alter-var-root
+              #'ds/apply-signal-computation-graph
+              (constantly original))))))
+
+     (when (System/getenv "TEST_FORCE_THREAD_POOL")
+       (use-fixtures :once with-thread-pool))))
 
 (defn config-port
   [opts]
