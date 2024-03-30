@@ -16,7 +16,7 @@
              original @#'ds/apply-signal-computation-graph
              add-exec (fn [system]
                         (-> system
-                            (assoc ::ds/execute (ds/execute-fn thread-pool))
+                            (update ::ds/execute #(or % (ds/execute-fn thread-pool)))
                             original))]
          (alter-var-root
           #'ds/apply-signal-computation-graph
@@ -668,3 +668,22 @@
                                                                   (swap! component-meta conj ::ds/post-start))}}}}]
     (is (= [::ds/pre-start ::ds/start ::ds/post-start]
            (get-in (ds/start system) [::ds/component-meta :group :component])))))
+
+#?(:clj
+   (deftest parallel-start-test
+     (let [a (promise)
+           b (promise)
+        ; Provide enough threads to allow the signal to send all 6 signals at
+        ; once, to make sure that it won't.
+           executor (Executors/newFixedThreadPool 6)]
+       (is (= {:app {:beep "boop"
+                     :boop "beep"}}
+           ; Create a system that can't start unless run concurrently
+              (-> #::ds{:defs {:app {:beep {::ds/start (fn [_] (deliver b "beep") @a)}
+                                     :boop {::ds/start (fn [_] (deliver a "boop") @b)}}}
+                        :execute (ds/execute-fn executor)}
+                  (ds/signal ::ds/start)
+                  future (deref 1000 {::ds/instances :timeout})
+                  ::ds/instances))
+           "System can be started by sending signals in parallel")
+       (.shutdown executor))))
