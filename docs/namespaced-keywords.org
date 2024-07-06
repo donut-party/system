@@ -12,7 +12,7 @@ use that alias for namespaced keywords:
 (ns donut.examples.printer
   (:require [donut.system :as ds]))
 
-;; use two colons to exand a namespace alias
+;; use two colons to expand a namespace alias
 ::ds/start
 ;; => :donut.system/start
 
