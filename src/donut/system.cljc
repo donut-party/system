@@ -166,10 +166,10 @@
 (def DonutSystem
   [:map
    [::defs ComponentGroups]
-   [::base {:optional true} [:map]]
    [::resolved-defs {:optional true} ComponentGroups]
-   [::graphs {:optional true} OrderGraphs]
    [::instances {:optional true} ComponentGroups]
+   [::base {:optional true} [:map]]
+   [::graphs {:optional true} OrderGraphs]
    [::component-meta {:optional true} ComponentGroups]
    [::signals {:optional true} [:map-of keyword? SignalConfig]]
    [::selected-component-ids {:optional true} [:set ComponentSelection]]
@@ -754,13 +754,86 @@
                                                              t))))]
     (remove-signal-computation-stage-node new-system computation-stage-node)))
 
-(defn- apply-signal-computation-graph
+(defn- apply-signal-computation-graph-serial
   [system]
   (loop [{:keys [::signal-computation-graph] :as system} system]
     (let [[computation-stage-node] (la/topsort signal-computation-graph)]
       (if-not computation-stage-node
         system
         (recur (apply-signal-stage system computation-stage-node))))))
+
+(defn contains-path?
+  [m path]
+  (loop [m    m
+         path path]
+    (let [[k & ks] path]
+      (cond
+        (not k)         true
+        (contains? m k) (recur (get m k) ks)
+        :else           false))))
+
+(defn merge-system-states
+  [[first-state :as states]]
+  (reduce (fn [s [path value]] (assoc-in s path value))
+          first-state
+          (for [facet        (keys first-state)
+                component-id (component-ids first-state)
+                state        states
+                :let         [path (into [facet] component-id)]
+                :when        (contains-path? state path)]
+            [path (get-in state path)])))
+
+#?(:clj
+   (do
+     (defn- complete-signal-computation
+       [state result-promise]
+       (let [{:keys [errors leaf-states]} @state]
+         (when (seq errors)
+           (throw (first errors)))
+         (deliver result-promise (merge-system-states leaf-states))))
+
+     (defn- compute-nodes
+       [{:keys [::execute] :as system} nodes-to-compute state result-promise]
+       (doseq [node nodes-to-compute]
+         (execute (fn []
+                    (try
+                      (let [{:keys [::signal-computation-graph] :as new-system} (if (empty? (:errors @state))
+                                                                                  (apply-signal-stage system node)
+                                                                                  system)
+                            children                                            (lg/successors signal-computation-graph node)]
+                        (swap! state update :completed conj node)
+                        (when (empty? children)
+                          (swap! state update :leaf-states conj new-system)
+                          (when (= (:completed @state)
+                                   (set (lg/nodes signal-computation-graph)))
+                            ;; TODO deliver to completed
+                            (complete-signal-computation state result-promise)))
+                        (compute-nodes new-system children state result-promise))
+                      (catch Exception e
+                        (swap! state :exceptions conj e)))))))
+
+     (defn- apply-signal-computation-graph-async
+       [{:keys [::signal-computation-graph] :as system}]
+       (let [nodes-to-compute (vec (filter #(empty? (lg/predecessors signal-computation-graph %))
+                                           (lg/nodes signal-computation-graph)))
+             state            (atom {:leaf-states #{}
+                                     :completed   #{}
+                                     :exceptions  #{}})
+             result-promise   (promise)]
+         (compute-nodes system nodes-to-compute state result-promise)
+         @result-promise))))
+
+#?(:cljs
+   (defn apply-signal-computation-graph-async
+     [_]
+     (throw (ex-info ":donut.system/execute not implement for clojurescript" {}))))
+
+
+(defn- apply-signal-computation-graph
+  [system]
+  (if (::execute system)
+    (apply-signal-computation-graph-async system)
+    (apply-signal-computation-graph-serial system)))
 
 ;;---
 ;;; init system, apply signal
