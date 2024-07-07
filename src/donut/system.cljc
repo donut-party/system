@@ -1,6 +1,7 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require
+   [clojure.set :as set]
    [clojure.walk :as walk]
    [clojure.zip :as zip]
    [donut.error :as de]
@@ -779,58 +780,66 @@
         false))))
 
 (defn merge-system-states
-  [[first-state :as states]]
-  (reduce (fn [s [path value]] (assoc-in s path value))
-          first-state
-          (for [facet        (keys first-state)
-                component-id (component-ids first-state)
-                state        states
+  [state-1 state-2]
+  (reduce (fn [result-state [path value]]
+            (assoc-in result-state path value))
+          state-1
+          (for [facet        (keys state-2)
+                component-id (component-ids state-1)
                 :let         [path (into [facet] component-id)]
-                :when        (contains-path? state path)]
-            [path (get-in state path)])))
+                :when        (contains-path? state-2 path)]
+            [path (get-in state-2 path)])))
 
 #?(:clj
    (do
      (defn- complete-signal-computation
-       [state result-promise]
-       (let [{:keys [errors leaf-states]} @state]
-         (when (seq errors)
-           (throw (first errors)))
-         (deliver result-promise (merge-system-states leaf-states))))
+       [state]
+       (let [{:keys [exceptions result-system]} @state]
+         (when (seq exceptions)
+           (throw (first exceptions)))
+         result-system))
 
      (defn- compute-nodes
-       [{:keys [::execute ::signal-computation-graph] :as system} all-nodes nodes-to-compute state result-promise]
-       (doseq [node nodes-to-compute]
-         (execute (fn []
-                    (try
-                      (let [new-system (if (empty? (:errors @state))
-                                         (apply-signal-stage system node)
-                                         system)
-                            children   (lg/successors signal-computation-graph node)]
-                        (if (empty? children)
-                          (let [state-val (swap! state #(-> %
-                                                            (update :completed conj node)
-                                                            (update :leaf-states conj new-system)))]
-                            (when (= (:completed state-val) all-nodes)
-                              (complete-signal-computation state result-promise)))
-                          (do
-                            (swap! state update :completed conj node)
-                            (compute-nodes new-system all-nodes children state result-promise))))
-                      (catch Exception e
-                        (swap! state update :exceptions conj e)))))))
+       [{:keys [state nodes-to-compute completed-promise]}]
+       (let [{:keys [::execute ::signal-computation-graph] :as system} (:result-system @state)]
+         (doseq [node nodes-to-compute]
+           (execute
+            (fn []
+              (when (and (empty? (set/difference (set (lg/predecessors signal-computation-graph node))
+                                                 (:completed @state)))
+                         (empty? (:exceptions @state)))
+                (let [new-system (try
+                                   (apply-signal-stage system node)
+                                   (catch Exception e
+                                     (swap! state update :exceptions conj e)
+                                     (deliver completed-promise true)
+                                     system))
+                      children   (lg/successors signal-computation-graph node)
+                      state-val  (swap! state #(-> %
+                                                   (update :completed conj node)
+                                                   (update :result-system merge-system-states new-system)))]
+                  (when (= (:completed state-val) (set (lg/nodes signal-computation-graph)))
+                    (deliver completed-promise true))
+                  (when (seq children)
+                    (compute-nodes {:nodes-to-compute  children
+                                    :state             state
+                                    :completed-promise completed-promise})))))))))
 
      (defn- apply-signal-computation-graph-async
        [{:keys [::signal-computation-graph] :as system}]
-       (let [all-nodes        (set (lg/nodes signal-computation-graph))
-             nodes-to-compute (->> all-nodes
-                                   (filter #(empty? (lg/predecessors signal-computation-graph %)))
-                                   vec)
-             state            (atom {:leaf-states []
-                                     :completed   #{}
-                                     :exceptions  #{}})
-             result-promise   (promise)]
-         (compute-nodes system all-nodes nodes-to-compute state result-promise)
-         @result-promise))))
+       (let [all-nodes         (set (lg/nodes signal-computation-graph))
+             nodes-to-compute  (->> all-nodes
+                                    (filter #(empty? (lg/predecessors signal-computation-graph %)))
+                                    vec)
+             state             (atom {:result-system system
+                                      :completed     #{}
+                                      :exceptions    #{}})
+             completed-promise (promise)]
+         (compute-nodes {:nodes-to-compute  nodes-to-compute
+                         :state             state
+                         :completed-promise completed-promise})
+         @completed-promise
+         (complete-signal-computation state)))))
 
 #?(:cljs
    (defn apply-signal-computation-graph-async

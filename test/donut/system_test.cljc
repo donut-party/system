@@ -32,8 +32,6 @@
      (when (System/getenv "TEST_FORCE_THREAD_POOL")
        (use-fixtures :once with-thread-pool))))
 
-
-
 (defn config-port
   [opts]
   (get-in opts [::ds/config :port]))
