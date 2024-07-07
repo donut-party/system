@@ -785,7 +785,7 @@
             (assoc-in result-state path value))
           state-1
           (for [facet        (keys state-2)
-                component-id (component-ids state-1)
+                component-id (component-ids state-2)
                 :let         [path (into [facet] component-id)]
                 :when        (contains-path? state-2 path)]
             [path (get-in state-2 path)])))
@@ -799,14 +799,14 @@
            (throw (first exceptions)))
          result-system))
 
-     (defn- compute-nodes
+     (defn- compute-nodes-async
        [{:keys [state nodes-to-compute completed-promise]}]
        (let [{:keys [::execute ::signal-computation-graph] :as system} (:result-system @state)]
          (doseq [node nodes-to-compute]
            (execute
             (fn []
-              (when (and (empty? (set/difference (set (lg/predecessors signal-computation-graph node))
-                                                 (:completed @state)))
+              (when (and (set/subset? (set (lg/predecessors signal-computation-graph node))
+                                      (:completed-nodes @state))
                          (empty? (:exceptions @state)))
                 (let [new-system (try
                                    (apply-signal-stage system node)
@@ -816,14 +816,15 @@
                                      system))
                       children   (lg/successors signal-computation-graph node)
                       state-val  (swap! state #(-> %
-                                                   (update :completed conj node)
+                                                   (update :completed-nodes conj node)
                                                    (update :result-system merge-system-states new-system)))]
-                  (when (= (:completed state-val) (set (lg/nodes signal-computation-graph)))
+                  (when (= (:completed-nodes state-val)
+                           (set (lg/nodes signal-computation-graph)))
                     (deliver completed-promise true))
                   (when (seq children)
-                    (compute-nodes {:nodes-to-compute  children
-                                    :state             state
-                                    :completed-promise completed-promise})))))))))
+                    (compute-nodes-async {:nodes-to-compute  children
+                                          :state             state
+                                          :completed-promise completed-promise})))))))))
 
      (defn- apply-signal-computation-graph-async
        [{:keys [::signal-computation-graph] :as system}]
@@ -831,13 +832,13 @@
              nodes-to-compute  (->> all-nodes
                                     (filter #(empty? (lg/predecessors signal-computation-graph %)))
                                     vec)
-             state             (atom {:result-system system
-                                      :completed     #{}
-                                      :exceptions    #{}})
+             state             (atom {:result-system   system
+                                      :completed-nodes #{}
+                                      :exceptions      #{}})
              completed-promise (promise)]
-         (compute-nodes {:nodes-to-compute  nodes-to-compute
-                         :state             state
-                         :completed-promise completed-promise})
+         (compute-nodes-async {:nodes-to-compute  nodes-to-compute
+                               :state             state
+                               :completed-promise completed-promise})
          @completed-promise
          (complete-signal-computation state)))))
 

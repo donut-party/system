@@ -334,13 +334,15 @@
     (is (= 1 @start-count)
         "parent system signals only applied once")
 
-    (let [stopped (ds/signal started ::ds/stop)]
-      (is (= {:prev {:job-queue "job queue"
-                     :db        "db"
-                     :port      9090
-                     :local     :local}
-              :now  :stopped}
-             (get-in stopped [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])
+    (let [stopped  (ds/signal started ::ds/stop)
+          expected {:prev {:job-queue "job queue"
+                           :db        "db"
+                           :port      9090
+                           :local     :local}
+                    :now  :stopped}]
+      (is (= expected
+             (get-in stopped [::ds/instances :sub-systems :system-1 ::ds/instances :app :server])))
+      (is (= expected
              (get-in stopped [::ds/instances :sub-systems :system-2 ::ds/instances :app :server]))))))
 
 (deftest select-components-test
