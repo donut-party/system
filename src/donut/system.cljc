@@ -780,14 +780,13 @@
         false))))
 
 (defn merge-system-states
-  [state-1 state-2]
+  [state-1 state-2 component-id]
   (reduce (fn [result-state [path value]]
             (assoc-in result-state path value))
           state-1
-          (for [facet        (keys state-2)
-                component-id (component-ids state-2)
-                :let         [path (into [facet] component-id)]
-                :when        (contains-path? state-2 path)]
+          (for [facet [::instances ::resolved-defs ::component-meta]
+                :let  [path (into [facet] component-id)]
+                :when (contains-path? state-2 path)]
             [path (get-in state-2 path)])))
 
 #?(:clj
@@ -817,7 +816,7 @@
                       children   (lg/successors signal-computation-graph node)
                       state-val  (swap! state #(-> %
                                                    (update :completed-nodes conj node)
-                                                   (update :result-system merge-system-states new-system)))]
+                                                   (update :result-system merge-system-states new-system node)))]
                   (when (= (:completed-nodes state-val)
                            (set (lg/nodes signal-computation-graph)))
                     (deliver completed-promise true))
