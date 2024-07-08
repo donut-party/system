@@ -763,6 +763,10 @@
         system
         (recur (apply-signal-stage system computation-stage-node))))))
 
+;;---
+;; parallel component signaling
+;;---
+
 (defn merge-system-states
   [state-1 state-2 [component-group-name component-name]]
   (reduce (fn [result-state [path value]]
@@ -789,6 +793,12 @@
 #?(:clj
    (do
      (defn- compute-nodes-async
+       "The strategy here is for each signal node to get computed, and merge the result
+  into an accumulating final system.
+
+  When a node is finished executing, it's responsible for enqueuing all of its
+  successor nodes that are ready. Successor nodes are ready when all of their
+  predecessors are completed."
        [{:keys [state nodes-to-compute completion-promise]}]
        (let [{:keys [::execute ::signal-computation-graph] :as system} (:result-system @state)]
          (doseq [node nodes-to-compute]
