@@ -763,88 +763,72 @@
         system
         (recur (apply-signal-stage system computation-stage-node))))))
 
-(defn contains-path?
-  [m path]
-  (loop [m    m
-         path path]
-    (let [[k & ks] path]
-      (cond
-        (not k)
-        true
-
-        (and (associative? m)
-             (contains? m k))
-        (recur (get m k) ks)
-
-        :else
-        false))))
-
 (defn merge-system-states
-  [state-1 state-2 component-id]
+  [state-1 state-2 [component-group-name component-name]]
   (reduce (fn [result-state [path value]]
             (assoc-in result-state path value))
           state-1
-          (for [facet [::instances ::resolved-defs ::component-meta]
-                :let  [path (into [facet] component-id)]
-                :when (contains-path? state-2 path)]
+          (for [facet (keys state-2)
+                :let  [path [facet component-group-name component-name]]
+                :when (contains? (get-in state-2 [facet component-group-name]) component-name)]
             [path (get-in state-2 path)])))
+
+(defn- ready-nodes
+  [graph completed nodes]
+  (filter (fn [node]
+            (set/subset? (set (lg/predecessors graph node)) completed))
+          nodes))
+
+(defn- complete-signal-computation
+  [state]
+  (let [{:keys [exceptions result-system]} @state]
+    (when (seq exceptions)
+      (throw (first exceptions)))
+    result-system))
 
 #?(:clj
    (do
-     (defn- complete-signal-computation
-       [state]
-       (let [{:keys [exceptions result-system]} @state]
-         (when (seq exceptions)
-           (throw (first exceptions)))
-         result-system))
-
      (defn- compute-nodes-async
-       [{:keys [state nodes-to-compute completed-promise]}]
+       [{:keys [state nodes-to-compute completion-promise]}]
        (let [{:keys [::execute ::signal-computation-graph] :as system} (:result-system @state)]
          (doseq [node nodes-to-compute]
            (execute
             (fn []
-              (when (and (set/subset? (set (lg/predecessors signal-computation-graph node))
-                                      (:completed-nodes @state))
-                         (empty? (:exceptions @state)))
+              (when (empty? (:exceptions @state))
                 (let [new-system (try
                                    (apply-signal-stage system node)
                                    (catch Exception e
                                      (swap! state update :exceptions conj e)
-                                     (deliver completed-promise true)
+                                     (deliver completion-promise true)
                                      system))
-                      children   (lg/successors signal-computation-graph node)
                       state-val  (swap! state #(-> %
                                                    (update :completed-nodes conj node)
                                                    (update :result-system merge-system-states new-system node)))]
                   (when (= (:completed-nodes state-val)
                            (set (lg/nodes signal-computation-graph)))
-                    (deliver completed-promise true))
-                  (when (seq children)
-                    (compute-nodes-async {:nodes-to-compute  children
-                                          :state             state
-                                          :completed-promise completed-promise})))))))))
+                    (deliver completion-promise true))
+                  (compute-nodes-async {:state              state
+                                        :nodes-to-compute   (ready-nodes signal-computation-graph
+                                                                         (:completed-nodes state-val)
+                                                                         (lg/successors signal-computation-graph node))
+                                        :completion-promise completion-promise}))))))))
 
      (defn- apply-signal-computation-graph-async
        [{:keys [::signal-computation-graph] :as system}]
-       (let [all-nodes         (set (lg/nodes signal-computation-graph))
-             nodes-to-compute  (->> all-nodes
-                                    (filter #(empty? (lg/predecessors signal-computation-graph %)))
-                                    vec)
-             state             (atom {:result-system   system
-                                      :completed-nodes #{}
-                                      :exceptions      #{}})
-             completed-promise (promise)]
-         (compute-nodes-async {:nodes-to-compute  nodes-to-compute
-                               :state             state
-                               :completed-promise completed-promise})
-         @completed-promise
+       (let [state              (atom {:result-system   system
+                                       :completed-nodes #{}
+                                       :exceptions      #{}})
+             completion-promise (promise)]
+         (compute-nodes-async {:state              state
+                               :nodes-to-compute   (ready-nodes signal-computation-graph #{} (lg/nodes signal-computation-graph))
+                               :completion-promise completion-promise})
+         @completion-promise
          (complete-signal-computation state)))))
 
 #?(:cljs
    (defn apply-signal-computation-graph-async
      [_]
-     (throw (ex-info ":donut.system/execute not implement for clojurescript" {}))))
+     (throw (ex-info ":donut.system/execute not implemented for clojurescript" {}))))
 
 
 (defn- apply-signal-computation-graph
