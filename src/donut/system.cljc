@@ -764,7 +764,7 @@
         (recur (apply-signal-stage system computation-stage-node))))))
 
 ;;---
-;; parallel component signaling
+;; async component signaling
 ;;---
 
 (defn merge-system-states
