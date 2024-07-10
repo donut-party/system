@@ -147,6 +147,27 @@
                (ds/signal ::ds/start)
                (select-keys [::ds/instances]))))))
 
+(deftest ref-false-instance-test
+  (testing "local ref"
+    (is (= {:enabled false}
+           (-> {::ds/defs
+                {:group {:component   {::ds/start  (fn [{{:keys [value]} ::ds/config}]
+                                                     {:enabled value})
+                                       ::ds/config {:value (ds/local-ref [:local-value])}}
+                         :local-value false}}}
+               (ds/start)
+               (-> ::ds/instances :group :component)))))
+
+  (testing "full ref"
+    (is (= {:enabled false}
+           (-> {::ds/defs
+                {:group-a {:component false}
+                 :group-b {:component {::ds/start  (fn [{{:keys [value]} ::ds/config}]
+                                                     {:enabled value})
+                                       ::ds/config {:value (ds/ref [:group-a :component])}}}}}
+               (ds/start)
+               (-> ::ds/instances :group-b :component))))))
+
 (deftest group-ref-test
   (testing "referred group is passed to referrer"
     (is (= #::ds{:instances {:env {:http-port 9090
