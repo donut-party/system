@@ -763,60 +763,87 @@
         system
         (recur (apply-signal-stage system computation-stage-node))))))
 
-(defn- merge-instance [system-a system-b [group component]]
-  (loop [system system-a
-         [k & ks] [::component-meta ::defs ::resolved-defs ::instances ::status]] 
-    (cond
-      (not k) system
+;;---
+;; async component signaling
+;;---
 
-      (contains? (get-in system-b [k group]) component)
-      (recur
-       (assoc-in system [k group component] (get-in system-b [k group component]))
-       ks)
-      
-      :else (recur system ks))))
+(defn merge-system-states
+  [state-1 state-2 [component-group-name component-name]]
+  (reduce (fn [result-state [path value]]
+            (assoc-in result-state path value))
+          state-1
+          (for [facet (keys state-2)
+                :let  [path [facet component-group-name component-name]]
+                :when (contains? (get-in state-2 [facet component-group-name]) component-name)]
+            [path (get-in state-2 path)])))
 
-(defn- apply-signal-computation-graph-parallel
-  [system]
-  (let [system (assoc system ::complete #{})
-        og (::signal-computation-graph system)
-        promises (atom [])]
-    (loop [{::keys [execute signal-computation-graph] :as system} system]
-      (let [real (set (filter (comp realized? second) @promises))
-            system (reduce
-                    (fn [sys [stage p]]
-                      (let [{:keys [error result]} @p]
-                        (if error
-                          (throw error)
-                          (-> (merge-instance sys result (take 2 stage))
-                              (update ::complete conj stage)))))
-                    system
-                    real)
-            {::keys [complete]} system
-            nodes (la/topsort signal-computation-graph)
-            computation-stage-node (some #(when (set/subset? (lg/predecessors og %) complete) %) nodes)]
-        (swap! promises #(filterv (comp not real) %))
-        (cond
-          computation-stage-node
-          (let [p (execute (fn []
-                             (apply-signal-stage system computation-stage-node)))]
-            (swap! promises conj [computation-stage-node p])
-            (recur (remove-signal-computation-stage-node system computation-stage-node)))
+(defn- ready-nodes
+  [graph completed nodes]
+  (filter (fn [node]
+            (set/subset? (set (lg/predecessors graph node)) completed))
+          nodes))
 
-          (seq @promises)
-          (do
-            #?(:clj (deref (second (first @promises)) 200 nil)
-               :cljs (deref (second (first @promises))))
-            (recur system))
+(defn- complete-signal-computation
+  [state]
+  (let [{:keys [exceptions result-system]} @state]
+    (when (seq exceptions)
+      (throw (first exceptions)))
+    result-system))
 
-          (empty? nodes) (dissoc system ::complete)
+#?(:clj
+   (do
+     (defn- compute-nodes-async
+       "The strategy here is for each signal node to get computed, and merge the result
+  into an accumulating final system.
 
-          :else (throw (ex-info "Unexpected state" {:promises @promises})))))))
+  When a node is finished executing, it's responsible for enqueuing all of its
+  successor nodes that are ready. Successor nodes are ready when all of their
+  predecessors are completed."
+       [{:keys [state nodes-to-compute completion-promise]}]
+       (let [{:keys [::execute ::signal-computation-graph] :as system} (:result-system @state)]
+         (doseq [node nodes-to-compute]
+           (execute
+            (fn []
+              (when (empty? (:exceptions @state))
+                (let [new-system (try
+                                   (apply-signal-stage system node)
+                                   (catch Exception e
+                                     (swap! state update :exceptions conj e)
+                                     (deliver completion-promise true)
+                                     system))
+                      state-val  (swap! state #(-> %
+                                                   (update :completed-nodes conj node)
+                                                   (update :result-system merge-system-states new-system node)))]
+                  (when (= (:completed-nodes state-val)
+                           (set (lg/nodes signal-computation-graph)))
+                    (deliver completion-promise true))
+                  (compute-nodes-async {:state              state
+                                        :nodes-to-compute   (ready-nodes signal-computation-graph
+                                                                         (:completed-nodes state-val)
+                                                                         (lg/successors signal-computation-graph node))
+                                        :completion-promise completion-promise}))))))))
+
+     (defn- apply-signal-computation-graph-async
+       [{:keys [::signal-computation-graph] :as system}]
+       (let [state              (atom {:result-system   system
+                                       :completed-nodes #{}
+                                       :exceptions      #{}})
+             completion-promise (promise)]
+         (compute-nodes-async {:state              state
+                               :nodes-to-compute   (ready-nodes signal-computation-graph #{} (lg/nodes signal-computation-graph))
+                               :completion-promise completion-promise})
+         @completion-promise
+         (complete-signal-computation state)))))
+
+#?(:cljs
+   (defn apply-signal-computation-graph-async
+     [_]
+     (throw (ex-info ":donut.system/execute not implemented for clojurescript" {}))))
 
 (defn- apply-signal-computation-graph
   [system]
   (if (::execute system)
-    (apply-signal-computation-graph-parallel system)
+    (apply-signal-computation-graph-async system)
     (apply-signal-computation-graph-serial system)))
 
 ;;---
@@ -1104,21 +1131,3 @@
                                      (not (get @component-instance-cache cache-key)))
                             (stop signal-args))))
           ::cache-key cache-key}))
-
-#?(:clj
-   (defn execute-fn
-     "Returns a fn that can be assigned as ::ds/execute in a system.
-      The fn takes a thunk and returns a promise that will contain the result
-      of running the thunk on the given executor. If the thunk throws, the
-      error is delivered to the promise."
-     [^java.util.concurrent.Executor executor]
-     (fn [thunk]
-       (let [p (promise)]
-         (.execute
-          executor
-          (fn []
-            (try
-              (deliver p {:result (thunk)})
-              (catch Throwable e
-                (deliver p {:error e})))))
-         p))))
