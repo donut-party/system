@@ -1,11 +1,36 @@
 (ns donut.system-test
   (:require
-   #?(:clj [clojure.test :refer [deftest is testing]]
+   #?(:clj [clojure.test :refer [deftest is testing use-fixtures]]
       :cljs [cljs.test :refer [deftest is testing] :include-macros true])
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
    [loom.graph :as lg]
-   [clojure.string :as str]))
+   [clojure.string :as str])
+  #?(:clj
+     (:import [java.util.concurrent Executors])))
+
+#?(:clj
+   (do
+     (defn with-thread-pool [f]
+       (let [thread-pool (Executors/newFixedThreadPool 8)
+             original @#'ds/apply-signal-computation-graph
+             add-exec (fn [system]
+                        (-> system
+                            (update ::ds/execute #(or % (ds/execute-fn thread-pool)))
+                            original))]
+         (alter-var-root
+          #'ds/apply-signal-computation-graph
+          (constantly add-exec))
+         (try
+           (f)
+           (finally
+             (.shutdownNow thread-pool)
+             (alter-var-root
+              #'ds/apply-signal-computation-graph
+              (constantly original))))))
+
+     (when (System/getenv "TEST_FORCE_THREAD_POOL")
+       (use-fixtures :once with-thread-pool))))
 
 (defn config-port
   [opts]
@@ -664,3 +689,38 @@
                                                                   (swap! component-meta conj ::ds/post-start))}}}}]
     (is (= [::ds/pre-start ::ds/start ::ds/post-start]
            (get-in (ds/start system) [::ds/component-meta :group :component])))))
+
+(deftest many-refs-test
+  (testing "A large number of components with interdependent refs are processed correctly"
+    (let [kw #(keyword (str "c" %))
+          component (fn [ref]
+                      {::ds/config ref
+                       ::ds/start
+                       (fn [{::ds/keys [config]}]
+                         (inc config))})
+          system {::ds/defs
+                  {:test
+                   (->> (range 1 128)
+                        (map #(do [(kw %) (component (ds/local-ref [(kw (quot % 2))]))]))
+                        (into {:c0 1}))}}]
+      (is (= {1 1, 2 1, 3 2, 4 4, 5 8, 6 16, 7 32, 8 64}
+             (-> system ds/start ::ds/instances :test vals frequencies))))))
+
+#?(:clj
+   (deftest parallel-start-test
+     (let [a (promise)
+           b (promise)
+        ; Provide enough threads to allow the signal to send all 6 signals at
+        ; once, to make sure that it won't.
+           executor (Executors/newFixedThreadPool 6)]
+       (is (= {:app {:beep "boop"
+                     :boop "beep"}}
+           ; Create a system that can't start unless run concurrently
+              (-> #::ds{:defs {:app {:beep {::ds/start (fn [_] (deliver b "beep") @a)}
+                                     :boop {::ds/start (fn [_] (deliver a "boop") @b)}}}
+                        :execute (ds/execute-fn executor)}
+                  (ds/signal ::ds/start)
+                  future (deref 1000 {::ds/instances :timeout})
+                  ::ds/instances))
+           "System can be started by sending signals in parallel")
+       (.shutdown executor))))

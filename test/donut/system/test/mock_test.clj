@@ -30,7 +30,9 @@
   (let [system (ds/start test-system {[:group-a :component-c] #::ds{:start  (fn [{:keys [::ds/config]}]
                                                                               (let [{:keys [component-a]} config]
                                                                                 (component-a :component-c)))
-                                                                    :config {:component-a (ds/local-ref [:component-a])}}})]
+                                                                    :config {:component-a (ds/local-ref [:component-a])
+                                                                             ; Force an order to make tests consistent
+                                                                             :depends-on (ds/local-ref [:component-b])}}})]
     (is (= [[[:group-a :component-a] [1 2 3]]
             [[:group-a :component-a] [:component-c]]]
            @(ds/instance system [dstm/COMPONENT-GROUP-NAME :mock-calls])))))

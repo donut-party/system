@@ -13,6 +13,7 @@ Testing:
 
 ```shell
 clojure -X:test
+TEST_FORCE_THREAD_POOL=1 clojure -X:test
 clojure -X:test-cljs
 ```
 

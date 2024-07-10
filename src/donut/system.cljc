@@ -1,6 +1,7 @@
 (ns donut.system
   (:refer-clojure :exclude [ref])
   (:require
+   [clojure.set :as set]
    [clojure.walk :as walk]
    [clojure.zip :as zip]
    [donut.error :as de]
@@ -754,13 +755,69 @@
                                                              t))))]
     (remove-signal-computation-stage-node new-system computation-stage-node)))
 
-(defn- apply-signal-computation-graph
+(defn- apply-signal-computation-graph-serial
   [system]
   (loop [{:keys [::signal-computation-graph] :as system} system]
     (let [[computation-stage-node] (la/topsort signal-computation-graph)]
       (if-not computation-stage-node
         system
         (recur (apply-signal-stage system computation-stage-node))))))
+
+(defn- merge-instance [system-a system-b [group component]]
+  (loop [system system-a
+         [k & ks] [::component-meta ::defs ::resolved-defs ::instances ::status]] 
+    (cond
+      (not k) system
+
+      (contains? (get-in system-b [k group]) component)
+      (recur
+       (assoc-in system [k group component] (get-in system-b [k group component]))
+       ks)
+      
+      :else (recur system ks))))
+
+(defn- apply-signal-computation-graph-parallel
+  [system]
+  (let [system (assoc system ::complete #{})
+        og (::signal-computation-graph system)
+        promises (atom [])]
+    (loop [{::keys [execute signal-computation-graph] :as system} system]
+      (let [real (set (filter (comp realized? second) @promises))
+            system (reduce
+                    (fn [sys [stage p]]
+                      (let [{:keys [error result]} @p]
+                        (if error
+                          (throw error)
+                          (-> (merge-instance sys result (take 2 stage))
+                              (update ::complete conj stage)))))
+                    system
+                    real)
+            {::keys [complete]} system
+            nodes (la/topsort signal-computation-graph)
+            computation-stage-node (some #(when (set/subset? (lg/predecessors og %) complete) %) nodes)]
+        (swap! promises #(filterv (comp not real) %))
+        (cond
+          computation-stage-node
+          (let [p (execute (fn []
+                             (apply-signal-stage system computation-stage-node)))]
+            (swap! promises conj [computation-stage-node p])
+            (recur (remove-signal-computation-stage-node system computation-stage-node)))
+
+          (seq @promises)
+          (do
+            #?(:clj (deref (second (first @promises)) 200 nil)
+               :cljs (deref (second (first @promises))))
+            (recur system))
+
+          (empty? nodes) (dissoc system ::complete)
+
+          :else (throw (ex-info "Unexpected state" {:promises @promises})))))))
+
+(defn- apply-signal-computation-graph
+  [system]
+  (if (::execute system)
+    (apply-signal-computation-graph-parallel system)
+    (apply-signal-computation-graph-serial system)))
 
 ;;---
 ;;; init system, apply signal
@@ -1047,3 +1104,21 @@
                                      (not (get @component-instance-cache cache-key)))
                             (stop signal-args))))
           ::cache-key cache-key}))
+
+#?(:clj
+   (defn execute-fn
+     "Returns a fn that can be assigned as ::ds/execute in a system.
+      The fn takes a thunk and returns a promise that will contain the result
+      of running the thunk on the given executor. If the thunk throws, the
+      error is delivered to the promise."
+     [^java.util.concurrent.Executor executor]
+     (fn [thunk]
+       (let [p (promise)]
+         (.execute
+          executor
+          (fn []
+            (try
+              (deliver p {:result (thunk)})
+              (catch Throwable e
+                (deliver p {:error e})))))
+         p))))
