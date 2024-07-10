@@ -670,7 +670,9 @@
                        ;; component. it allows signal application to progress to
                        ;; the point that we can throw an exception saying that
                        ;; the ref is invalid
-                       (not resolved-def)
+                       (or (not (contains? (::defs system) (first component-id)))
+                           (not (contains? (get-in system [::defs (first component-id)])
+                                           (second component-id))))
                        system-identity
 
                        (component? resolved-def)
@@ -826,20 +828,16 @@
 (defn- merge-imports
   "Copies ref'd instances from parent-system into subsystem so that subsystem's
   imported refs will resolve correctly"
-  [{:keys [::imports] :as system-component} parent-system]
-  (reduce (fn [system {:keys [key]}]
-            (assoc-in system
-                      (into [::subsystem ::instances] key)
-                      (get-in parent-system (into [::instances] key))))
+  [{:keys [::imports] :as system-component}]
+  (reduce (fn [system [component-group-name instances]]
+            (assoc-in system [::subsystem ::defs component-group-name] instances))
           system-component
           imports))
 
 (defn- subsystem-resolver
   [parent-system component-id]
   (-> (default-resolve-refs parent-system component-id)
-      (update-in (into [::resolved-defs] component-id)
-                 (fn [system]
-                   (merge-imports system parent-system)))))
+      (update-in (into [::resolved-defs] component-id) merge-imports)))
 
 (defn- forward-start-signal
   [signal-name]
