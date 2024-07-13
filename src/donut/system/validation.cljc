@@ -4,7 +4,8 @@
    [donut.system :as ds]
    [donut.system.plugin :as dsp]))
 
-(defn signal-meta
+(defn- signal-meta
+  "Used in ex-info when validation fails"
   [{:keys [::ds/component-id ::ds/system]}]
   {:component-id component-id
    :handler-name (::ds/handler-name system)})
