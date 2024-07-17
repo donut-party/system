@@ -1894,27 +1894,29 @@ responsible for forwarding all other signals to the subsystem.
 should be imported into the subsystem. This is how the subsystems can reference
 the parent system's component `[:services :stack]`.
 
-## Parallel signaling
+## Async signaling
 
 donut.system can send signals to components in parallel rather than one at a time.
 To enable this, add `::ds/execute` to your system. The value should be a function
-that takes a thunk as an argument and returns a promise. The function should handle
-running the thunk and delivering to the promise a map of either `{:result ...}`
-or `{:error ...}`.
+that executes a function asynchronously. For example:
 
-The easiest way to get started is to use `ds/execute-fn` with an
-[Executor](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Executor.html). Here's an example:
+``` clojure
+(ds/start (assoc system ::ds/execute (fn [f] (future (f)))))
+```
+
+You might want to use an
+[executor](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Executor.html).
+Here's how you could do that:
 
 ```clojure
 (let [executor (java.util.concurrent.Executors/newFixedThreadPool 8)]
   (try
-    (ds/start (assoc system ::ds/execute (ds/execute-fn executor))
+    (ds/start (assoc system ::ds/execute (fn [f] (.execute executor f)))
     (finally
       (.shutdown executor)))))
 ```
 
-This is a Clojure-only feature. There is no ClojureScript implementation of
-`ds/execute-fn`.
+This is a Clojure-only feature. It's not implemented for ClojureScript.
 
 ## Purpose
 
