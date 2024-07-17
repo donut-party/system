@@ -1,6 +1,7 @@
 (ns donut.examples.validate
   (:require
    [donut.system :as ds]
+   [donut.system.validation :as dsv]
    [malli.core :as m]))
 
 (defn validate-config
@@ -10,10 +11,10 @@
 
 (def system
   {::ds/defs
-   {:group {:component-a #::ds{:before-start validate-config
-                               :start        "component a"
-                               :config       {:schema [:map [:foo any?] [:baz any?]]}}
-            :component-b #::ds{:before-start validate-config
-                               :start        "component b"
-                               :config       {:schema [:map [:foo any?] [:baz any?]]}}
-            :component-c #::ds{:start "component-c"}}}})
+   {:group {:component-a #::ds{:start           (fn [_] "this doesn't get called because config is invalid")
+                               :config          {:max "100"}
+                               :config-schema   [:map [:max pos-int?]]
+                               :instance-schema pos-int?}}}
+   ::ds/plugins [dsv/validation-plugin]})
+
+(ds/start system)
