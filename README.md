@@ -1803,13 +1803,7 @@ you use [malli] to spec component configs and instances. Here's an example:
 (ns donut.examples.validate
   (:require
    [donut.system :as ds]
-   [donut.system.validation :as dsv]
-   [malli.core :as m]))
-
-(defn validate-config
-  [{:keys [->validation schema] :as config}]
-  (when-let [errors (and schema (m/explain schema config))]
-    (->validation errors)))
+   [donut.system.validation :as dsv]))
 
 (def system
   {::ds/defs
