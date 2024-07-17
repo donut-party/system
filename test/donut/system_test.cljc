@@ -585,8 +585,12 @@
                  {:group
                   {:component (ds/cache-component
                                {::ds/start (fn [_] (swap! counter inc))
-                                ::ds/stop  (fn [_] (swap! counter + 10))})}}}]
-    (ds/start system)
+                                ::ds/stop  (fn [_] (swap! counter + 10))})}}}
+        started-system (ds/start system)]
+
+    (is (= 1
+           (get-in started-system [::ds/instances :group :component])))
+
     (is (= 1 @counter))
     (ds/stop system)
     (is (= 1 @counter))
