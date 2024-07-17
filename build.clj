@@ -13,7 +13,7 @@
   (:refer-clojure :exclude [test]))
 
 (def lib 'party.donut/system)
-(def version (format "0.0.%s" (b/git-count-revs nil)))
+(def version (format "1.0.%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
 
