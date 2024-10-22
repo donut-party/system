@@ -729,3 +729,21 @@
                   ::ds/instances))
            "System can be started by sending signals in parallel")
        (.shutdown executor))))
+
+#?(:clj
+   ; Exceptions can be thrown with no message at all
+   ; e.g., (io/resource nil) creates a NullPointerException
+   ; with no message in clojure 1.12.0.
+   ; https://github.com/donut-party/system/pull/39
+   (deftest test-exception-with-no-message
+     (let [system #::ds{:defs {:a {:ex {::ds/start (fn [_] (throw (Exception.)))}}}}]
+       (is (thrown?
+            clojure.lang.ExceptionInfo
+            (ds/start system))
+           "Exception with nil message is wrapped in ExceptionInfo")
+       (is (= Exception
+              (try
+                (ds/start system)
+                (catch Throwable e
+                  (class (ex-cause e)))))
+           "Original exception is preserved."))))

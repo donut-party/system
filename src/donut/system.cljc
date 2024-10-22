@@ -726,7 +726,7 @@
   [system computation-stage throwable]
   (let [message #?(:clj (.getMessage throwable)
                    :cljs (. throwable -message))]
-    (if (re-find #"^:donut.system" message)
+    (if (some->> message (re-find #"^:donut.system"))
       ;; let donut.system exceptions flow through
       throwable
       (let [ei (ex-info (str "Error on " computation-stage " when applying signal")
