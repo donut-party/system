@@ -346,7 +346,10 @@
 (deftest select-components-test
   (testing "if you specify components, the union of their subgraphs is used"
     (let [system-def {::ds/defs {:env {:http-port #::ds{:start 9090}}
-                                 :app {:http-server #::ds{:start  config-port
+                                 :app {; Test that dependents are not included in the subgraph
+                                       :after-http  #::ds{:config {:depends-on (ds/local-ref [:http-server])}
+                                                          :start "after http-server"}
+                                       :http-server #::ds{:start  config-port
                                                           :stop   "stopped http-server"
                                                           :config {:port (ds/ref [:env :http-port])}}
                                        :db          #::ds{:start "db"
