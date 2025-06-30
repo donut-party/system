@@ -851,8 +851,13 @@
 ;;---
 
 (defn select-components
-  "You can scope down what component keys to use. In subsequent interactions with
-  a system, use only those component keys."
+  "Returns a new system with component selection noted, so that
+   when you send signals to the new system the signals are only
+   sent to the selected components and the components they
+   depend on (recursively).
+
+   If you include a keyword in the selected components set,
+   then all components in that group will be selected."
   [system component-keys]
   (assoc system
          ::selected-component-ids
