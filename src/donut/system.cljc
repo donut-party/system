@@ -4,6 +4,7 @@
    [clojure.set :as set]
    [clojure.walk :as walk]
    [clojure.zip :as zip]
+   [donut.compose :as dc]
    [donut.error :as de]
    [donut.system.plugin :as dsp]
    [loom.alg :as la]
@@ -36,9 +37,9 @@
 (defn assoc-many
   "(assoc-many {} {[:foo :bar] :bux}) => {:foo {:bar :bux}"
   ([m assocs]
-   (reduce-kv (fn [m path val] (assoc-in m path val))
-              m
-              assocs))
+   (if (every? vector? (keys assocs))
+     (dc/compose m (with-meta assocs {::dc/path-updates true}))
+     (dc/compose m assocs)))
   ([m prefix assocs]
    (update-in m prefix assoc-many assocs)))
 
@@ -48,11 +49,6 @@
   (reduce-kv (fn [m path f] (update-in m path f))
              m
              update-many-with-map))
-
-(defn configure-component
-  "Help in setting just the config of a component"
-  [m configs]
-  (assoc-many m [::config] configs))
 
 (defn get-component-facet
   [system facet [component-group component-name :as component-id]]

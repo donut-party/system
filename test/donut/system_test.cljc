@@ -2,12 +2,14 @@
   (:require
    #?(:clj [clojure.test :refer [deftest is testing use-fixtures]]
       :cljs [cljs.test :refer [deftest is testing] :include-macros true])
+   [clojure.string :as str]
+   [donut.compose :as dc]
    [donut.system :as ds :include-macros true]
    [loom.alg :as la]
-   [loom.graph :as lg]
-   [clojure.string :as str])
+   [loom.graph :as lg])
   #?(:clj
-     (:import [java.util.concurrent Executors])))
+     (:import
+      [java.util.concurrent Executors])))
 
 #?(:clj
    (do
@@ -35,15 +37,6 @@
 (defn config-port
   [opts]
   (get-in opts [::ds/config :port]))
-
-(deftest configure-component-test
-  (testing "sets config path vals"
-    (is (= #::ds{:config {:foo :bar
-                          :baz {:bux :bleh}}}
-           (ds/configure-component
-            {}
-            {[:foo] :bar
-             [:baz :bux] :bleh})))))
 
 (deftest merge-base-test
   (testing "merges with components that have signals"
@@ -432,7 +425,20 @@
          (ds/assoc-many {}
                         [:foo]
                         {[:a :b] 1
-                         [:c :d] 2}))))
+                         [:c :d] 2})))
+
+  (testing "works with nested maps"
+    (is (= {:foo {:a {:b 1}
+                  :c {:d 2}}}
+           (ds/assoc-many {}
+                          [:foo]
+                          {:a {:b 1}
+                           :c {:d 2}}))))
+
+  (testing "can compose"
+    (is (= {:foo 2}
+           (ds/assoc-many {:foo 1}
+                          {:foo (dc/update inc)})))))
 
 (deftest system-config-test
   (is (= {::ds/defs {:group {:component-a 1
