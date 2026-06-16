@@ -19,7 +19,7 @@
 
 (defn- pom-template [version]
   [[:description "dependency injection lib / framework foundation"]
-   [:url "https://github.com/donut-power/system"]
+   [:url "https://github.com/donut-party/system"]
    [:licenses
     [:license
      [:name "MIT"]
@@ -28,9 +28,9 @@
     [:developer
      [:name "Daniel Higginbotham"]]]
    [:scm
-    [:url "https://github.com/donut-power/system"]
-    [:connection "scm:git:https://github.com/donut-power/system.git"]
-    [:developerConnection "scm:git:ssh:git@github.com:donut-power/system.git"]
+    [:url "https://github.com/donut-party/system"]
+    [:connection "scm:git:https://github.com/donut-party/system.git"]
+    [:developerConnection "scm:git:ssh:git@github.com:donut-party/system.git"]
     [:tag (str "v" version)]]])
 
 (defn- jar-opts [opts]
