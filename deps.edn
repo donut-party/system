@@ -6,6 +6,11 @@
          party.donut/compose         {:mvn/version "0.0.30"}
          party.donut/error           {:mvn/version "0.0.18"}}
 
+ :donut/lib {:name           party.donut/system
+             :description    "dependency injection lib / framework foundation"
+             :github         "donut-party/system"
+             :version-prefix "1.0"}
+
  :aliases
  {:dev
   {:extra-deps  {djblue/portal     {:mvn/version "0.35.1"}
@@ -26,6 +31,6 @@
    :exec-fn     cljs-test-runner.main/-main}
 
   :build
-  {:deps       {io.github.clojure/tools.build {:mvn/version "0.9.6"}
-                slipset/deps-deploy           {:mvn/version "0.2.1"}}
-   :ns-default build}}}
+  {:deps       {io.github.donut-party/framework-build
+                {:git/sha "912e0b0ffc914cf1b5824650268307062d92e40c"}}
+   :ns-default donut.build}}}
